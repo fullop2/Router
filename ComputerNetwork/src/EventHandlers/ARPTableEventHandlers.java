@@ -33,16 +33,11 @@ public class ARPTableEventHandlers implements EventHandlers {
 		});
 	}
 
-	public static void updateARPTable(String[] stringData) {
-		DefaultTableModel dm = ((DefaultTableModel)ARPCachePanel.table.getModel());
-		int rc = dm.getRowCount();
-		for(int i = rc-1; i >=0; i--) {
-			dm.removeRow(i);
-		}
-		for(String str : stringData) {
-			String data[] = str.split(" ");
-			data[2] = NILayer.GetAdapterObject(Integer.parseInt(data[2])).getDescription();
-			dm.addRow(data);
-		}
+	public static synchronized void add(String[] data) {
+		((DefaultTableModel)ARPCachePanel.table.getModel()).addRow(data);
+	}
+	
+	public static synchronized void remove(int index) {
+		((DefaultTableModel)ARPCachePanel.table.getModel()).removeRow(index);
 	}
 }

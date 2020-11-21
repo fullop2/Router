@@ -160,92 +160,29 @@ public class IPLayer implements BaseLayer {
 	}
 	
 	@Override
-	public boolean Receive(byte[] input) {
+	public synchronized boolean Receive(byte[] input) {
+
 		if(input.length < 20)
 			return false;
 		
 		_IP_HEADER receiveHeader = new _IP_HEADER(input);
 		if(versionValid(receiveHeader.VER) && lengthValid(receiveHeader.HLEN)) {
-			if(isMine(receiveHeader.ipSrcAddr.addr))
-				return false;
-			else if(!isMine(receiveHeader.ipDstAddr.addr)) {
-//				// 다른 IP Layer로 이동				
-				Route route = router.getRoute(receiveHeader.ipDstAddr.addr);
-				if(route._interface == -1) { // unreachable
-					return false;
-				}
-				else {
-					// 목적지에 대한 MAC 정보가 없는 경우
-					if(Arrays.equals(ARPLayer.arp.getEthernet(receiveHeader.ipDstAddr.addr), null)) {
-						
-						// 현재 어뎁터를 제외한 나머지 어뎁터에 ARP를 보냄
-						for(int i = 0; i < IPLayer.routingIPLayer.size();i++) {
-							IPLayer otherIPLayer = IPLayer.routingIPLayer.get(i);
-							if(this == otherIPLayer) continue;
-							ARPLayer otherARPLayer = (ARPLayer)otherIPLayer.GetUnderLayer(1);
-							
-							/*
-							 * Sender IP : 라우터의 다른 어뎁터의 IP
-							 * Sender ETH : 라우터의 다른 어뎁터 MAC
-							 * Target IP : 찾을 Gateway IP
-							 * Target ETH : 브로드캐스팅
-							 */
-							otherARPLayer.setIPSenderAddress(otherARPLayer.myIP.addr);
-							otherARPLayer.setEthernetSenderAddress(otherARPLayer.myETH.addr);
-							otherARPLayer.setIPTargetAddress(receiveHeader.ipDstAddr.addr);
-							otherARPLayer.setEthernetTargetAddress(ETHERNET.BROADCAST);
-							otherARPLayer.Send(null,0);
-							// 패킷을 저장해두고 스레드 시작
-							new FindEthernetThread(input, receiveHeader.ipDstAddr.addr).start();
-						}
-						return false;	
-					}
-					else {
-						routingIPLayer.get(route._interface).Send(input, input.length);
-						return true;
-					}
-				}
-			}
-				
+			printIPInfo("IP RECV", receiveHeader.ipSrcAddr.addr, receiveHeader.ipDstAddr.addr);				
 		}
 		return false;
 		
 	}
 	
-	class FindEthernetThread extends Thread {
-		byte[] msg;
-		byte[] targetIP;
-
-		public FindEthernetThread(byte[] msg, byte[] targetIP) {
-			this.msg = msg;
-			this.targetIP = targetIP;
-		}
-
-		@Override
-		public void run() {
-			int interfaceNumber = -1;
-			
-			while (true) {
-				try {
-					Thread.sleep(1000);
-					if((interfaceNumber = ARPLayer.arp.getInterface(targetIP)) != -1) 
-						break;
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
-			routingIPLayer.get(interfaceNumber).GetUnderLayer().Send(msg, msg.length);
-		}
-	}
-	
-	public boolean Send(byte[] input, int length) {
-		
-		_IP_HEADER header = new _IP_HEADER(input);
-		ARPLayer arp = (ARPLayer)p_aUnderLayer.get(1);
-		EthernetLayer ethernetLayer = (EthernetLayer)p_aUnderLayer.get(0);
-		ethernetLayer.setDstEthernetAddress(arp.arp.getEthernet(header.ipDstAddr.addr));
-		return p_aUnderLayer.get(0).Send(input, input.length);		
-		
+	public static void printIPInfo(String msg, byte[] send, byte[] recv) {
+		System.out.print(msg + " [ SRC : ");
+		for(int i = 0; i < 3; i++)
+			System.out.print(String.format("%d.", (int)(send[i] & 0xff)));
+		System.out.print(String.format("%d", (int)(send[5] & 0xff)));
+		System.out.print(", DST : ");
+		for(int i = 0; i < 3; i++)
+			System.out.print(String.format("%d.", (int)(recv[i] & 0xff)));
+		System.out.print(String.format("%d", (int)(recv[5] & 0xff)));
+		System.out.println("]");
 	}
 	
 	@Override

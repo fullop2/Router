@@ -39,7 +39,7 @@ public class RouteAddEventHandlers implements EventHandlers {
 				data[1] = RouteAddFrame.txtNetmask.getText();
 				data[2] = RouteAddFrame.txtGateway.getText(); 
 				data[3] = (isUp ? "U" : "") + (isGateway ? "G" : "") + (isHost ? "H" : "");
-				data[4] = NILayer.GetAdapterObject(_int).getDescription();
+				data[4] = Integer.toString(_int);
 				data[5] = "1";
 				
 				IPLayer.router.add(dest, netmask, gateway, flag, _int, 1);
@@ -48,16 +48,4 @@ public class RouteAddEventHandlers implements EventHandlers {
 		});
 	}
 	
-	public static void updateARPTable(String[] stringData) {
-		DefaultTableModel dm = ((DefaultTableModel)ARPCachePanel.table.getModel());
-		int rc = dm.getRowCount();
-		for(int i = 0; i < rc; i++) {
-			dm.removeRow(i);
-		}
-		for(String str : stringData) {
-			String data[] = str.split(" ");
-			data[2] = data[2].trim();
-			dm.addRow(data);
-		}
-	}
 }

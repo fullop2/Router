@@ -22,8 +22,7 @@ public class ApplicationController {
 	
 	public void init(){
 		new AppView();
-		NILayer.SetAdapterList();
-		for(int i = 0; i < NILayer.m_pAdapterList.size(); i++) {
+		for(int i = 0; i < 2; i++) {
 
 			LayerManager layerManager = new LayerManager();
 			
@@ -39,8 +38,9 @@ public class ApplicationController {
 			IPLayer.routingIPLayer.add(ipLayer);
 
 			try {
-				PcapIf pcapIf = NILayer.GetAdapterObject(i);
-				niLayer.SetRouter(i);
+				niLayer.SetAdapterList();
+				PcapIf pcapIf = niLayer.GetAdapterObject(i);
+				niLayer.SetAdapterNumber(i);
 				byte[] addr = pcapIf.getHardwareAddress();
 				ethernetLayer.setSrcEthernetAddress(addr);
 				arpLayer.setMyEthernet(addr);

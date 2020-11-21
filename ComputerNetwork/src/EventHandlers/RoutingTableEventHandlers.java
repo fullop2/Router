@@ -22,18 +22,6 @@ public class RoutingTableEventHandlers implements EventHandlers {
 		});
 	}
 	
-	public static void updateARPTable(String[] stringData) {
-//		DefaultTableModel dm = ((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel());
-//		int rc = dm.getRowCount();
-//		for(int i = rc-1; i >=0; i--) {
-//			dm.removeRow(i);
-//		}
-//		for(String str : stringData) {
-//			String data[] = str.split(" ");
-//			data[2] = data[2].trim();
-//			dm.addRow(data);
-//		}
-	}
 	
 	public static void add(String[] data) {
 		((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).addRow(data);

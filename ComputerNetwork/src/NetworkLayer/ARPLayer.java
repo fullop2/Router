@@ -128,114 +128,19 @@ public class ARPLayer implements BaseLayer {
 	private boolean needProxy(_ARP_HEADER header){
 		return arp.hasIPInProxyTable(header.ipTargetAddr.addr) && isNIL(header.enetTargetAddr.addr);
 	}
-	/*
-	 * 송신 전 헤더의 송신자 수신자 설정 필요
-	 */
-	public boolean Send(byte[] input, int length) {	
-		
-		
-		if(!isMine(arpHeader.ipTargetAddr.addr)) {// 메세지 수신자가 나인 경우 : GARP
-			arp.addARPCache(arpHeader.ipTargetAddr.addr, ETHERNET.NIL, index);
-		}
-		
-		byte[] header = arpHeader.makeHeader();
-		p_UnderLayer.Send(header,header.length);
-		
-		System.out.println("Send ARP request");
-		ARP.printARPInfo("Sender", arpHeader.ipSenderAddr.addr, arpHeader.enetSenderAddr.addr);
-		ARP.printARPInfo("Target", arpHeader.ipTargetAddr.addr, arpHeader.enetTargetAddr.addr);
-		System.out.println();
-		return false;
-	}
-
 
 	public synchronized boolean Receive(byte[] input) {
-				
+		System.out.println("ARP Receive");		
 		_ARP_HEADER receivedHeader = new _ARP_HEADER(input);
 		
 		if(isMine(receivedHeader.ipSenderAddr.addr)) {// 메세지 전송자가 나인 경우 아무것도 하지 않음
 			return true;
 		}
 		
-		// 내가 보낸 ARP가 아니라면 ARP Table에 추가
-		
-		byte[] ip = new byte[4];
-		System.arraycopy(receivedHeader.ipSenderAddr.addr, 0, ip, 0, 4);		
-		byte[] eth = new byte[6];
-		System.arraycopy(receivedHeader.enetSenderAddr.addr, 0, eth, 0, 6);
-		
-		
-		arp.addARPCache(ip,eth,index);
-		
 		System.out.println("Receive ARP Request");
 		ARP.printARPInfo("Sender", receivedHeader.ipSenderAddr.addr, receivedHeader.enetSenderAddr.addr);
 		ARP.printARPInfo("Target", receivedHeader.ipTargetAddr.addr, receivedHeader.enetTargetAddr.addr);
-		
-		/*
-		 * 1. ARP 요청이고
-		 * 
-		 * 1) 나에게 온 요청일 경우
-		 * 2) 프록싱 가능할 경우
-		 * 3) GARP인 경우
-		 * 
-		 * 내 맥을 넣어서 답장
-		 */
-		if(isRequest(receivedHeader.opcode) && 
-				(isMine(receivedHeader.ipTargetAddr.addr) || needProxy(receivedHeader)|| isGARP(receivedHeader))
-		   )
-		{	
-			receivedHeader.opcode[1] = 0x02; // make reply
-			System.arraycopy(receivedHeader.enetTargetAddr.addr, 0, myETH.addr, 0, 6);
-			
-			/*
-			 * 일반 ARP 요청은 목적지가 수신한 ARP 메세지에 존재하므로 건드리지 않아도 됨
-			 * 하지만 GARP의 경우 Target과 Sender가 동일함. 따라서 현재 자신의 IP 정보를 넣어서 답장을 해줘야 한다
-			 */
-			if(Arrays.equals(receivedHeader.ipTargetAddr.addr,receivedHeader.ipSenderAddr.addr)) {
-				System.out.println("[ TYPE : GARP Request]\n");
-				System.arraycopy(receivedHeader.ipTargetAddr.addr, 0, myIP.addr, 0, 6);
-			}
-			else {
-				System.out.println("[ TYPE : ARP Request]\n");
-			}
 
-			// swap sender and target
-			_IP_ADDR ipSender = receivedHeader.ipSenderAddr;
-			_ETHERNET_ADDR ethSender = receivedHeader.enetSenderAddr;
-			
-			receivedHeader.ipSenderAddr = receivedHeader.ipTargetAddr;
-			receivedHeader.enetSenderAddr = receivedHeader.enetTargetAddr;
-			
-			receivedHeader.ipTargetAddr = ipSender;
-			receivedHeader.enetTargetAddr = ethSender;
-			
-			/* HW Type을 ARP 프로토콜 정보에서 알 수 있다 
-			 * 따라서 ARP Layer에서 하위 레이어의 정보에 접근 가능 
-			 */
-			if(Arrays.equals(ETHERNET.HW_TYPE,receivedHeader.hardwareType))  
-				((EthernetLayer)p_UnderLayer).setDstEthernetAddress(receivedHeader.enetTargetAddr.addr);
-			
-			byte[] header = receivedHeader.makeHeader();
-			p_UnderLayer.Send(header,header.length);	
-			
-			System.out.println("Send ARP Reply");
-		}
-		else { // 나에게 오지 않은 경우, 들어온 쪽을 제외한 나머지 어뎁터로 브로드캐스팅
-
-			for(int i = 0; i < IPLayer.routingIPLayer.size();i++) {
-				if(i == index) continue;
-				IPLayer otherIPLayer = IPLayer.routingIPLayer.get(i);
-				ARPLayer otherARPLayer = (ARPLayer)otherIPLayer.GetUnderLayer(1);
-				
-				otherARPLayer.arpHeader = receivedHeader;
-				otherARPLayer.Send(null,0);
-			}
-		}
-		
-		
-
-		
-		
 		return true;
 	}
 	

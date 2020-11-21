@@ -70,28 +70,6 @@ public class EthernetLayer implements BaseLayer {
 		ethernetHeader.type[1] = type[1];
 	}
 	
-	
-	@Override
-	public synchronized boolean Send(byte[] input, int length) {
-		byte[] frame = new byte[14+length];
-		byte[] header = ethernetHeader.makeHeader();
-		
-		System.arraycopy(header, 0, frame, 0, 14);
-		System.arraycopy(input, 0, frame, 14, length);
-		
-		p_UnderLayer.Send(frame,frame.length);
-		
-		return true;
-	}
-
-	private boolean isBroadCast(byte[] addr) {
-		return Arrays.equals(BROADCAST_ETHERNET, addr);
-	}
-	
-	private boolean isMine(byte[] addr) {
-		return Arrays.equals(ethernetHeader.enetSrcAddr.addr, addr);
-	}
-	
 	private boolean isARP(byte[] type) {
 		return type[0] == 0x08 && type[1] == 0x06;
 	}
@@ -99,25 +77,45 @@ public class EthernetLayer implements BaseLayer {
 	private boolean isIP(byte[] type) {
 		return type[0] == 0x08 && type[1] == 0x00;
 	}
+	private boolean isMine(byte[] addr) {
+		return Arrays.equals(ethernetHeader.enetSrcAddr.addr, addr);
+	}
 	
 	@Override
 	public synchronized boolean Receive(byte[] input) {
+		System.out.println("ETH Receive");
 		_ETHERNET_HEADER receiveHeader = new _ETHERNET_HEADER(input);
 		
-		byte[] data = new byte[input.length-14];
-		System.arraycopy(input, 14, data, 0, input.length-14);
-		if(isARP(receiveHeader.type)) {
-			setEthernetType(receiveHeader.type);
-			p_aUpperLayer.get(1).Receive(data);
+		printMACInfo(receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
+		if(!isMine(receiveHeader.enetSrcAddr.addr)) {
+			byte[] data = new byte[input.length-14];
+			System.arraycopy(input, 14, data, 0, input.length-14);
+			if(isARP(receiveHeader.type)) {
+				setEthernetType(receiveHeader.type);
+				p_aUpperLayer.get(1).Receive(data);
+			}
+			else if(isIP(receiveHeader.type)) {
+				setEthernetType(receiveHeader.type);
+				p_aUpperLayer.get(0).Receive(data);
+			}
 		}
-		else if(isIP(receiveHeader.type)) {
-			setEthernetType(receiveHeader.type);
-			p_aUpperLayer.get(0).Receive(data);
-		}
+		
 		
 		return true;
 	}
 
+	public static void printMACInfo(byte[] send, byte[] recv) {
+		System.out.print("[ SEND : ");
+		for(int i = 0; i < 5; i++)
+			System.out.print(String.format("%02X ", send[i] & 0xff));
+		System.out.print(String.format("%02X", send[5] & 0xff));
+		System.out.print(", RECV : ");
+		for(int i = 0; i < 5; i++)
+			System.out.print(String.format("%02X ", recv[i] & 0xff));
+		System.out.print(String.format("%02X", recv[5] & 0xff));
+		System.out.println("]");
+	}
+	
 	@Override
 	public void SetUnderLayer(BaseLayer pUnderLayer) {
 		// TODO Auto-generated method stub

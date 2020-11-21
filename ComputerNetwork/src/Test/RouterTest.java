@@ -33,16 +33,20 @@ class RouterTest {
 	@BeforeAll
 	static void init() {
 		new AppView();
-		NILayer.SetAdapterList();
+		
+		NILayer niLayer = new NILayer("NI");
+		niLayer.SetAdapterList();
+		
 		for(int i = 0; i < 2; i++) {
 
 			LayerManager layerManager = new LayerManager();
 			testLayers[i] = new TestLayer("NI");
-			TestLayer niLayer = testLayers[i];
+			TestLayer testLayer = testLayers[i];
+			
 			EthernetLayer ethernetLayer = new EthernetLayer("Ethernet");
 			ARPLayer arpLayer = new ARPLayer("ARP",i);
 			IPLayer ipLayer = new IPLayer("IP");
-			layerManager.AddLayer(niLayer);
+			layerManager.AddLayer(testLayer);
 			layerManager.AddLayer(ethernetLayer);
 			layerManager.AddLayer(arpLayer);
 			layerManager.AddLayer(ipLayer);
@@ -50,7 +54,7 @@ class RouterTest {
 			IPLayer.routingIPLayer.add(ipLayer);
 
 			try {
-				PcapIf pcapIf = NILayer.GetAdapterObject(i);
+				PcapIf pcapIf = niLayer.GetAdapterObject(i);
 				byte[] addr = pcapIf.getHardwareAddress();
 				ethernetLayer.setSrcEthernetAddress(addr);
 				arpLayer.setMyEthernet(addr);

@@ -102,14 +102,17 @@ public class ARP {
 					
 					long timeElipse = System.currentTimeMillis() - beforeTime;
 					beforeTime =  System.currentTimeMillis();
-					
+					int index = 0;
 					Iterator<ARPCache> iter = arpCacheTable.iterator();
 					while(iter.hasNext()) {
 						ARPCache cache = iter.next();
 						cache.timeToLive -= timeElipse;
 						if(cache.timeToLive <= 0) {
 							iter.remove();
-							updateARPCachePanel();
+							ARPTableEventHandlers.remove(index);
+						}
+						else {
+							index++;
 						}
 					}
 				} catch (InterruptedException e) {
@@ -128,16 +131,20 @@ public class ARP {
 		System.arraycopy(ethe, 0, ethernet, 0, 6);
 		Iterator<ARPCache> iter = arpCacheTable.iterator();
 		
+		int index = 0;
 		while(iter.hasNext()) {
 			ARPCache cache = iter.next();
 			if(Arrays.equals(cache.ip.addr,ip)) {
 				printARPInfo("Remove Cache", cache.ip.addr, cache.ethernet.addr);
 				iter.remove();
+				ARPTableEventHandlers.remove(index);
 				break;
 			}
+			index++;
 		}
-
-		arpCacheTable.add(new ARPCache(ip,ethernet,interfaceNumber));
+		
+		ARPCache currentCache = new ARPCache(ip,ethernet,interfaceNumber);
+		arpCacheTable.add(currentCache);
 		
 		iter = arpCacheTable.iterator();
 		while(iter.hasNext()) {
@@ -147,18 +154,21 @@ public class ARP {
 			if(eth == null) eth = new byte[6];
 			printARPInfo("ARP Cache", ipp, eth);
 		}
-		updateARPCachePanel();
+		
+		ARPTableEventHandlers.add(currentCache.toString().split(" "));
 		return true;
 	}
 
 	public void deleteARPCache(byte[] ip) {
 		
 		Iterator<ARPCache> iter = arpCacheTable.iterator();
+		int index = 0;
 		while(iter.hasNext()) {
 			ARPCache arpCache = iter.next();
 			if(Arrays.equals(arpCache.ip.addr,ip)) {
 				arpCacheTable.remove(arpCache);
-				updateARPCachePanel();
+				ARPTableEventHandlers.remove(index);
+				index++;
 				return;
 			}
 		}
@@ -188,12 +198,12 @@ public class ARP {
 	/*
 	 * View Update
 	 */
-	private void updateARPCachePanel() {
-		String[] stringData = new String[arpCacheTable.size()];
-		for(int i = 0; i < stringData.length; i++)
-			stringData[i] = arpCacheTable.get(i).toString();
-		ARPTableEventHandlers.updateARPTable(stringData);
-	}
+//	private void updateARPCachePanel() {
+//		String[] stringData = new String[arpCacheTable.size()];
+//		for(int i = 0; i < stringData.length; i++)
+//			stringData[i] = arpCacheTable.get(i).toString();
+//		ARPTableEventHandlers.updateARPTable(stringData);
+//	}
 	
 	public static void printARPInfo(String who, byte[] ip, byte[] eth) {
 		System.out.print(who + " : [ ETH : ");
