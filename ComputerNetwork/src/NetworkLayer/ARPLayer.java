@@ -130,17 +130,17 @@ public class ARPLayer implements BaseLayer {
 	}
 
 	public synchronized boolean Receive(byte[] input) {
-		System.out.println("ARP Receive");		
 		_ARP_HEADER receivedHeader = new _ARP_HEADER(input);
 		
 		if(isMine(receivedHeader.ipSenderAddr.addr)) {// 메세지 전송자가 나인 경우 아무것도 하지 않음
 			return true;
 		}
 		
-		System.out.println("Receive ARP Request");
-		ARP.printARPInfo("Sender", receivedHeader.ipSenderAddr.addr, receivedHeader.enetSenderAddr.addr);
-		ARP.printARPInfo("Target", receivedHeader.ipTargetAddr.addr, receivedHeader.enetTargetAddr.addr);
-
+		System.out.println("ARP RECV [");
+		ARP.printARPInfo("\tSender", receivedHeader.ipSenderAddr.addr, receivedHeader.enetSenderAddr.addr);
+		ARP.printARPInfo("\tTarget", receivedHeader.ipTargetAddr.addr, receivedHeader.enetTargetAddr.addr);
+		System.out.println("]\n");
+		
 		return true;
 	}
 	

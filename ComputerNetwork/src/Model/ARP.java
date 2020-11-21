@@ -194,18 +194,8 @@ public class ARP {
 			}
 		return -1; // not exist
 	}
-	
-	/*
-	 * View Update
-	 */
-//	private void updateARPCachePanel() {
-//		String[] stringData = new String[arpCacheTable.size()];
-//		for(int i = 0; i < stringData.length; i++)
-//			stringData[i] = arpCacheTable.get(i).toString();
-//		ARPTableEventHandlers.updateARPTable(stringData);
-//	}
-	
-	public static void printARPInfo(String who, byte[] ip, byte[] eth) {
+		
+	public synchronized static void printARPInfo(String who, byte[] ip, byte[] eth) {
 		System.out.print(who + " : [ ETH : ");
 		for(int i = 0; i < 5; i++)
 			System.out.print(String.format("%02X ", eth[i] & 0xff));

@@ -83,19 +83,18 @@ public class EthernetLayer implements BaseLayer {
 	
 	@Override
 	public synchronized boolean Receive(byte[] input) {
-		System.out.println("ETH Receive");
 		_ETHERNET_HEADER receiveHeader = new _ETHERNET_HEADER(input);
 		
-		printMACInfo(receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
+		
 		if(!isMine(receiveHeader.enetSrcAddr.addr)) {
 			byte[] data = new byte[input.length-14];
 			System.arraycopy(input, 14, data, 0, input.length-14);
 			if(isARP(receiveHeader.type)) {
-				setEthernetType(receiveHeader.type);
+				printMACInfo("ETH RECV", receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
 				p_aUpperLayer.get(1).Receive(data);
 			}
 			else if(isIP(receiveHeader.type)) {
-				setEthernetType(receiveHeader.type);
+				printMACInfo("ETH RECV", receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
 				p_aUpperLayer.get(0).Receive(data);
 			}
 		}
@@ -104,12 +103,12 @@ public class EthernetLayer implements BaseLayer {
 		return true;
 	}
 
-	public static void printMACInfo(byte[] send, byte[] recv) {
-		System.out.print("[ SEND : ");
+	public synchronized static void printMACInfo(String msg, byte[] send, byte[] recv) {
+		System.out.print(msg+" [ SRC : ");
 		for(int i = 0; i < 5; i++)
 			System.out.print(String.format("%02X ", send[i] & 0xff));
 		System.out.print(String.format("%02X", send[5] & 0xff));
-		System.out.print(", RECV : ");
+		System.out.print(", DST : ");
 		for(int i = 0; i < 5; i++)
 			System.out.print(String.format("%02X ", recv[i] & 0xff));
 		System.out.print(String.format("%02X", recv[5] & 0xff));

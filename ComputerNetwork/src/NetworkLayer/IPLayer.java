@@ -173,16 +173,17 @@ public class IPLayer implements BaseLayer {
 		
 	}
 	
-	public static void printIPInfo(String msg, byte[] send, byte[] recv) {
+	public synchronized static void printIPInfo(String msg, byte[] send, byte[] recv) {
 		System.out.print(msg + " [ SRC : ");
 		for(int i = 0; i < 3; i++)
 			System.out.print(String.format("%d.", (int)(send[i] & 0xff)));
-		System.out.print(String.format("%d", (int)(send[5] & 0xff)));
+		System.out.print(String.format("%d", (int)(send[3] & 0xff)));
 		System.out.print(", DST : ");
 		for(int i = 0; i < 3; i++)
 			System.out.print(String.format("%d.", (int)(recv[i] & 0xff)));
-		System.out.print(String.format("%d", (int)(recv[5] & 0xff)));
+		System.out.print(String.format("%d", (int)(recv[3] & 0xff)));
 		System.out.println("]");
+		System.out.println();
 	}
 	
 	@Override
