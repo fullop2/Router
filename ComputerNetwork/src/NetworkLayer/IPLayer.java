@@ -1,25 +1,28 @@
 package NetworkLayer;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+
+import org.jnetpcap.Pcap;
+import org.jnetpcap.packet.PcapPacket;
+import org.jnetpcap.packet.PcapPacketHandler;
+
+import Model.ETHERNET;
+import Model.Route;
+import Model.Router;
+import Model._IP_ADDR;
 
 public class IPLayer implements BaseLayer {
 	public int nUpperLayerCount = 0;
 	public String pLayerName = null;
-	public ArrayList<BaseLayer> p_aUnderLayer = new ArrayList<BaseLayer>();
-	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
+	public List<BaseLayer> p_aUnderLayer = new ArrayList<BaseLayer>();
+	public List<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
 	
-	private class _IP_ADDR {
-		private byte[] addr = new byte[4];
-
-		public _IP_ADDR() {
-			this.addr[0] = (byte) 0x00;
-			this.addr[1] = (byte) 0x00;
-			this.addr[2] = (byte) 0x00;
-			this.addr[3] = (byte) 0x00;
-		}
-	}
+	public static List<IPLayer> routingIPLayer = new ArrayList<IPLayer>();
+	public static Router router = new Router();
+	
+	public _IP_ADDR myIP;
 	
 	@SuppressWarnings("unused")
 	private class _IP_HEADER {
@@ -80,8 +83,8 @@ public class IPLayer implements BaseLayer {
 			headerChecksum[1] = header[11];
 
 			
-			System.arraycopy(header, 12, ipDstAddr.addr, 0, 4);
-			System.arraycopy(header, 16, ipSrcAddr.addr, 0, 4);
+			System.arraycopy(header, 16, ipDstAddr.addr, 0, 4);
+			System.arraycopy(header, 12, ipSrcAddr.addr, 0, 4);
 		}
 		
 		public void setTotalLength(int length) {
@@ -116,54 +119,37 @@ public class IPLayer implements BaseLayer {
 			
 			
 			for(int i = 0; i < 4; i++) {
-				header[12+i] = ipDstAddr.addr[i];
-				header[16+i] = ipSrcAddr.addr[i];
+				header[16+i] = ipDstAddr.addr[i];
+				header[12+i] = ipSrcAddr.addr[i];
 			}
 			return header;
 		}
 	}
 	
-	private _IP_HEADER ipHeader = new _IP_HEADER();
+//	private _IP_HEADER ipHeader = new _IP_HEADER();
 	
 	public IPLayer(String string) {
 		pLayerName = string;
+		myIP = new _IP_ADDR();
 	}
 
-	public void setIPDstAddr(byte[] addr) {
+	void setIPDstAddr(_IP_HEADER ipHeader, byte[] addr) {
 		for(int i = 0; i < 4; i++)
 			ipHeader.ipDstAddr.addr[i] = addr[i];
 	}
 	
-	public void setIPSrcAddr(byte[] addr) {
+	void setIPSrcAddr(_IP_HEADER ipHeader, byte[] addr) {
 		for(int i = 0; i < 4; i++)
 			ipHeader.ipSrcAddr.addr[i] = addr[i];
 	}
 	
-	public byte[] getIPSrcAddr() {
-		return ipHeader.ipSrcAddr.addr;
-	}
-	
-	public byte[] getIPDstAddr() {
-		return ipHeader.ipDstAddr.addr;
-	}
-	
-	@Override
-	public boolean Send(byte[] input, int length) {
-		
-		if(input == null && length == 0) // ARP req
-			return p_aUnderLayer.get(1).Send(null, 0);
-		
-		byte[] packet = new byte[20+length];
-		ipHeader.setTotalLength(20+length);
-		System.arraycopy(ipHeader.makeHeader(), 0, packet, 0, 20);
-		System.arraycopy(input, 0, packet, 20, length);
-		
-		return p_aUnderLayer.get(0).Send(packet, 20+length);
+	public void setMyIP(byte[] ip) {
+		System.arraycopy(ip, 0, myIP.addr, 0, 4);
 	}
 	
 	// 해당 ip가 내 ip인지 확인
 	private boolean isMine(byte[] ip) {
-		return Arrays.equals(ipHeader.ipSrcAddr.addr, ip);
+		return Arrays.equals(myIP.addr, ip);
 	}
 	
 	private boolean versionValid(byte versionLength) {
@@ -182,15 +168,83 @@ public class IPLayer implements BaseLayer {
 		if(versionValid(receiveHeader.VER) && lengthValid(receiveHeader.HLEN)) {
 			if(isMine(receiveHeader.ipSrcAddr.addr))
 				return false;
-			else if(isMine(receiveHeader.ipDstAddr.addr)) {
-				byte[] data = new byte[input.length-20];
-				System.arraycopy(input, 20, data, 0, input.length-20);
-				p_aUpperLayer.get(0).Receive(data);
-				return true;
+			else if(!isMine(receiveHeader.ipDstAddr.addr)) {
+//				// 다른 IP Layer로 이동				
+				Route route = router.getRoute(receiveHeader.ipDstAddr.addr);
+				if(route._interface == -1) { // unreachable
+					return false;
+				}
+				else {
+					// 목적지에 대한 MAC 정보가 없는 경우
+					if(Arrays.equals(ARPLayer.arp.getEthernet(receiveHeader.ipDstAddr.addr), null)) {
+						
+						// 현재 어뎁터를 제외한 나머지 어뎁터에 ARP를 보냄
+						for(int i = 0; i < IPLayer.routingIPLayer.size();i++) {
+							IPLayer otherIPLayer = IPLayer.routingIPLayer.get(i);
+							if(this == otherIPLayer) continue;
+							ARPLayer otherARPLayer = (ARPLayer)otherIPLayer.GetUnderLayer(1);
+							
+							/*
+							 * Sender IP : 라우터의 다른 어뎁터의 IP
+							 * Sender ETH : 라우터의 다른 어뎁터 MAC
+							 * Target IP : 찾을 Gateway IP
+							 * Target ETH : 브로드캐스팅
+							 */
+							otherARPLayer.setIPSenderAddress(otherARPLayer.myIP.addr);
+							otherARPLayer.setEthernetSenderAddress(otherARPLayer.myETH.addr);
+							otherARPLayer.setIPTargetAddress(receiveHeader.ipDstAddr.addr);
+							otherARPLayer.setEthernetTargetAddress(ETHERNET.BROADCAST);
+							otherARPLayer.Send(null,0);
+							// 패킷을 저장해두고 스레드 시작
+							new FindEthernetThread(input, receiveHeader.ipDstAddr.addr).start();
+						}
+						return false;	
+					}
+					else {
+						routingIPLayer.get(route._interface).Send(input, input.length);
+						return true;
+					}
+				}
 			}
 				
 		}
 		return false;
+		
+	}
+	
+	class FindEthernetThread extends Thread {
+		byte[] msg;
+		byte[] targetIP;
+
+		public FindEthernetThread(byte[] msg, byte[] targetIP) {
+			this.msg = msg;
+			this.targetIP = targetIP;
+		}
+
+		@Override
+		public void run() {
+			int interfaceNumber = -1;
+			
+			while (true) {
+				try {
+					Thread.sleep(1000);
+					if((interfaceNumber = ARPLayer.arp.getInterface(targetIP)) != -1) 
+						break;
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			routingIPLayer.get(interfaceNumber).GetUnderLayer().Send(msg, msg.length);
+		}
+	}
+	
+	public boolean Send(byte[] input, int length) {
+		
+		_IP_HEADER header = new _IP_HEADER(input);
+		ARPLayer arp = (ARPLayer)p_aUnderLayer.get(1);
+		EthernetLayer ethernetLayer = (EthernetLayer)p_aUnderLayer.get(0);
+		ethernetLayer.setDstEthernetAddress(arp.arp.getEthernet(header.ipDstAddr.addr));
+		return p_aUnderLayer.get(0).Send(input, input.length);		
 		
 	}
 	
@@ -247,5 +301,6 @@ public class IPLayer implements BaseLayer {
 		pUULayer.SetUnderLayer(this);
 
 	}
+
 
 }

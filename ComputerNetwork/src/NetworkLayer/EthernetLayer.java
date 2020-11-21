@@ -1,13 +1,9 @@
 package NetworkLayer;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+
+import Model._ETHERNET_ADDR;
 
 public class EthernetLayer implements BaseLayer {
 	public int nUpperLayerCount = 0;
@@ -17,19 +13,6 @@ public class EthernetLayer implements BaseLayer {
 
 	private final byte[] BROADCAST_ETHERNET = {(byte)0xFF,(byte)0xFF,(byte)0xFF,(byte)0xFF,(byte)0xFF,(byte)0xFF};
 	
-	private class _ETHERNET_ADDR {
-		private byte[] addr = new byte[6];
-
-		public _ETHERNET_ADDR() {
-			this.addr[0] = (byte) 0x00;
-			this.addr[1] = (byte) 0x00;
-			this.addr[2] = (byte) 0x00;
-			this.addr[3] = (byte) 0x00;
-			this.addr[4] = (byte) 0x00;
-			this.addr[5] = (byte) 0x00;
-		}
-	}
-
 	@SuppressWarnings("unused")
 	private class _ETHERNET_HEADER {
 		_ETHERNET_ADDR enetDstAddr;
@@ -88,7 +71,8 @@ public class EthernetLayer implements BaseLayer {
 	}
 	
 	
-	public boolean Send(byte[] input, int length) {
+	@Override
+	public synchronized boolean Send(byte[] input, int length) {
 		byte[] frame = new byte[14+length];
 		byte[] header = ethernetHeader.makeHeader();
 		
@@ -115,21 +99,20 @@ public class EthernetLayer implements BaseLayer {
 	private boolean isIP(byte[] type) {
 		return type[0] == 0x08 && type[1] == 0x00;
 	}
-
-	public boolean Receive(byte[] input) {
+	
+	@Override
+	public synchronized boolean Receive(byte[] input) {
 		_ETHERNET_HEADER receiveHeader = new _ETHERNET_HEADER(input);
 		
-		if(isBroadCast(receiveHeader.enetDstAddr.addr) || isMine(receiveHeader.enetDstAddr.addr)) {
-			byte[] data = new byte[input.length-14];
-			System.arraycopy(input, 14, data, 0, input.length-14);
-			if(isARP(receiveHeader.type)) {
-				setEthernetType(receiveHeader.type);
-				p_aUpperLayer.get(1).Receive(data);
-			}
-			else if(isIP(receiveHeader.type)) {
-				setEthernetType(receiveHeader.type);
-				p_aUpperLayer.get(0).Receive(data);
-			}
+		byte[] data = new byte[input.length-14];
+		System.arraycopy(input, 14, data, 0, input.length-14);
+		if(isARP(receiveHeader.type)) {
+			setEthernetType(receiveHeader.type);
+			p_aUpperLayer.get(1).Receive(data);
+		}
+		else if(isIP(receiveHeader.type)) {
+			setEthernetType(receiveHeader.type);
+			p_aUpperLayer.get(0).Receive(data);
 		}
 		
 		return true;
@@ -180,4 +163,5 @@ public class EthernetLayer implements BaseLayer {
 		pUULayer.SetUnderLayer(this);
 
 	}
+
 }

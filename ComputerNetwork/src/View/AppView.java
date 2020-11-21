@@ -14,7 +14,7 @@ public class AppView extends JFrame{
 
 		setTitle("Router");
 
-		setBounds(250, 250, 920, 440);
+		setBounds(250, 250, 920, 540);
 		setResizable(false);
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 

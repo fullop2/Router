@@ -2,104 +2,24 @@ package NetworkLayer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
 
-import EventHandlers.ARPTableEventHandlers;
+import Model.ARP;
+import Model.ETHERNET;
+import Model._ETHERNET_ADDR;
+import Model._IP_ADDR;
 
 public class ARPLayer implements BaseLayer {
 	public int nUpperLayerCount = 0;
 	public String pLayerName = null;
 	public BaseLayer p_UnderLayer = null;
 	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
-	
-	// proxy arp table(key : device, value: IP Addr + MAC Addr)
-	public HashMap<String,byte[]> proxyTable=new HashMap<String, byte[]>();
+	public int index;
 	
 	// arp cache table
-	private List<ARPCache> arpCacheTable = Collections.synchronizedList(new ArrayList<ARPCache>());
+	public static ARP arp = new ARP();
 	
-	private final byte[] NIL_ETHERNET = new byte[6];
-	private final byte[] BROADCAST_ETHERNET = new byte[6];
-	private final byte[] HW_TYPE_ETH = {0x00, 0x01};
-	
-	public class ARPCache{
-		_IP_ADDR ip = new _IP_ADDR();
-		_ETHERNET_ADDR ethernet = new _ETHERNET_ADDR();
-		int timeToLive;
-		
-		public ARPCache(byte[] ip, byte[] ethernet) {
-			setEthernet(ethernet);
-			setIp(ip);
-			
-			if(ethernet == null || isNIL(ethernet))
-				setTimeToLive(180000);
-			else
-				setTimeToLive(1200000);
-		}
-		
-		public void setTimeToLive(int milliSecond) {
-			timeToLive = milliSecond;
-		}
-		public void setEthernet(byte[] ethernet) {
-			if(ethernet== null)
-				return;
-			assert(ethernet.length==6);
-			System.arraycopy(ethernet, 0, this.ethernet.addr, 0, 6);
-		}
-		
-		public void setIp(byte[] ip) {
-			assert(ip.length == 4);
-			System.arraycopy(ip, 0, this.ip.addr, 0, 4);
-		}
-		
-		public String toString() {
-			
-			StringBuffer stringBuffer = new StringBuffer();
-			
-			for(int i = 0; i < 3; i++)
-				stringBuffer.append((int)(ip.addr[i] & 0xff)+".");
-			stringBuffer.append((int)(ip.addr[3] & 0xff)+" ");
-			if(Arrays.equals(NIL_ETHERNET, ethernet.addr)) {
-				stringBuffer.append("???????????? incompleted\n");
-			}
-			else {
-				for(int i = 0; i < 5; i++) {
-					stringBuffer.append(String.format("%02X-", (ethernet.addr[i] & 0xff)).toUpperCase());
-				}
-				stringBuffer.append(String.format("%02X", (ethernet.addr[5] & 0xff)).toUpperCase());
-				stringBuffer.append(" completed\n");
-			}
-			
-			return stringBuffer.toString();
-		}
-	}
-	
-	private class _ETHERNET_ADDR {
-		private byte[] addr = new byte[6];
-
-		public _ETHERNET_ADDR() {
-			this.addr[0] = (byte) 0x00;
-			this.addr[1] = (byte) 0x00;
-			this.addr[2] = (byte) 0x00;
-			this.addr[3] = (byte) 0x00;
-			this.addr[4] = (byte) 0x00;
-			this.addr[5] = (byte) 0x00;
-		}
-	}
-	
-	private class _IP_ADDR {
-		private byte[] addr = new byte[4];
-
-		public _IP_ADDR() {
-			this.addr[0] = (byte) 0x00;
-			this.addr[1] = (byte) 0x00;
-			this.addr[2] = (byte) 0x00;
-			this.addr[3] = (byte) 0x00;
-		}
-	}
+	public _IP_ADDR myIP;
+	public _ETHERNET_ADDR myETH;	
 	
 	@SuppressWarnings("unused")
 	private class _ARP_HEADER {
@@ -176,44 +96,29 @@ public class ARPLayer implements BaseLayer {
 	_ARP_HEADER arpHeader = new _ARP_HEADER();
 	
 	
-	public ARPLayer(String string) {
+	public ARPLayer(String string, int interfaceNumber) {
 		pLayerName = string;
-		
-		for(int i = 0; i < 6; i++) {
-			NIL_ETHERNET[i] = 0x00;
-			BROADCAST_ETHERNET[i] = (byte)0xff;
-		}
-		
-		new ARPTimer().start();
+		index = interfaceNumber;
+		myIP = new _IP_ADDR();
+		myETH = new _ETHERNET_ADDR();
 	}
-  
+  	
+	public void setMyIP(byte[] ip) {
+		System.arraycopy(ip, 0, myIP.addr, 0, 4);
+	}
+	public void setMyEthernet(byte[] eth) {
+		System.arraycopy(eth, 0, myETH.addr, 0, 6);
+	}
 	
 	private boolean isRequest(byte[] opcode) {
 		return (opcode[0] == (byte)0x00) && (opcode[1] == (byte)0x01);
 	}
 	
-	/*
-	 * Proxy ARP에 수신한 메세지의 목적지 IP 정보가 있을 경우
-	 * 내 정보로 이더넷을 갱신하여 전송
-	 */
-	private boolean hasIPInProxyTable(byte[] receiveIP) {
-		for(byte[] address : proxyTable.values()) {
-			byte[] ip = new byte[4];
-			System.arraycopy(address, 0, ip, 0, 4);
-			if(Arrays.equals(ip, receiveIP)) {
-				System.out.println("proxy Table에 해당 IP 존재");
-				return true;
-			}
-		}
-		return false;
-	}
-	
 	private boolean isMine(byte[] ipAddr) {
-		return Arrays.equals(arpHeader.ipSenderAddr.addr, ipAddr);
+		return Arrays.equals(myIP.addr, ipAddr);
 	}
-	
 	private boolean isNIL(byte[] ethernetAddr){
-		return Arrays.equals(NIL_ETHERNET, ethernetAddr);
+		return Arrays.equals(ETHERNET.NIL, ethernetAddr);
 	}
 	
 	private boolean isGARP(_ARP_HEADER header){
@@ -221,64 +126,31 @@ public class ARPLayer implements BaseLayer {
 	}
 	
 	private boolean needProxy(_ARP_HEADER header){
-		return hasIPInProxyTable(header.ipTargetAddr.addr) && isNIL(header.enetTargetAddr.addr);
+		return arp.hasIPInProxyTable(header.ipTargetAddr.addr) && isNIL(header.enetTargetAddr.addr);
 	}
-	
-	class ARPTimer extends Thread {
-		
-		private long beforeTime;
-		
-		ARPTimer(){
-			beforeTime = System.currentTimeMillis();
-		}
-		@Override
-		public void run() {
-			while(true) {
-				try {
-					Thread.sleep(1000);
-					
-					long timeElipse = System.currentTimeMillis() - beforeTime;
-					beforeTime =  System.currentTimeMillis();
-					
-					Iterator<ARPCache> iter = arpCacheTable.iterator();
-					while(iter.hasNext()) {
-						ARPCache cache = iter.next();
-						cache.timeToLive -= timeElipse;
-						if(cache.timeToLive <= 0) {
-							iter.remove();
-							updateARPCachePanel();
-						}
-					}
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
-		}
-	}
-	
-	@Override
+	/*
+	 * 송신 전 헤더의 송신자 수신자 설정 필요
+	 */
 	public boolean Send(byte[] input, int length) {	
 		
+		
 		if(!isMine(arpHeader.ipTargetAddr.addr)) {// 메세지 수신자가 나인 경우 : GARP
-			addARPCache(arpHeader.ipTargetAddr.addr, NIL_ETHERNET);
+			arp.addARPCache(arpHeader.ipTargetAddr.addr, ETHERNET.NIL, index);
 		}
 		
 		byte[] header = arpHeader.makeHeader();
 		p_UnderLayer.Send(header,header.length);
 		
 		System.out.println("Send ARP request");
-		printARPInfo("Sender", arpHeader.ipSenderAddr.addr, arpHeader.enetSenderAddr.addr);
-		printARPInfo("Target", arpHeader.ipTargetAddr.addr, arpHeader.enetTargetAddr.addr);
+		ARP.printARPInfo("Sender", arpHeader.ipSenderAddr.addr, arpHeader.enetSenderAddr.addr);
+		ARP.printARPInfo("Target", arpHeader.ipTargetAddr.addr, arpHeader.enetTargetAddr.addr);
 		System.out.println();
 		return false;
 	}
 
-	
-	@Override
+
 	public synchronized boolean Receive(byte[] input) {
-		
-		
-		
+				
 		_ARP_HEADER receivedHeader = new _ARP_HEADER(input);
 		
 		if(isMine(receivedHeader.ipSenderAddr.addr)) {// 메세지 전송자가 나인 경우 아무것도 하지 않음
@@ -293,11 +165,11 @@ public class ARPLayer implements BaseLayer {
 		System.arraycopy(receivedHeader.enetSenderAddr.addr, 0, eth, 0, 6);
 		
 		
-		addARPCache(ip,eth);
+		arp.addARPCache(ip,eth,index);
 		
 		System.out.println("Receive ARP Request");
-		printARPInfo("Sender", receivedHeader.ipSenderAddr.addr, receivedHeader.enetSenderAddr.addr);
-		printARPInfo("Target", receivedHeader.ipTargetAddr.addr, receivedHeader.enetTargetAddr.addr);
+		ARP.printARPInfo("Sender", receivedHeader.ipSenderAddr.addr, receivedHeader.enetSenderAddr.addr);
+		ARP.printARPInfo("Target", receivedHeader.ipTargetAddr.addr, receivedHeader.enetTargetAddr.addr);
 		
 		/*
 		 * 1. ARP 요청이고
@@ -312,17 +184,16 @@ public class ARPLayer implements BaseLayer {
 				(isMine(receivedHeader.ipTargetAddr.addr) || needProxy(receivedHeader)|| isGARP(receivedHeader))
 		   )
 		{	
-			
-			
 			receivedHeader.opcode[1] = 0x02; // make reply
-			receivedHeader.enetTargetAddr = arpHeader.enetSenderAddr;
+			System.arraycopy(receivedHeader.enetTargetAddr.addr, 0, myETH.addr, 0, 6);
+			
 			/*
 			 * 일반 ARP 요청은 목적지가 수신한 ARP 메세지에 존재하므로 건드리지 않아도 됨
 			 * 하지만 GARP의 경우 Target과 Sender가 동일함. 따라서 현재 자신의 IP 정보를 넣어서 답장을 해줘야 한다
 			 */
 			if(Arrays.equals(receivedHeader.ipTargetAddr.addr,receivedHeader.ipSenderAddr.addr)) {
 				System.out.println("[ TYPE : GARP Request]\n");
-				receivedHeader.ipTargetAddr = arpHeader.ipSenderAddr;
+				System.arraycopy(receivedHeader.ipTargetAddr.addr, 0, myIP.addr, 0, 6);
 			}
 			else {
 				System.out.println("[ TYPE : ARP Request]\n");
@@ -341,7 +212,7 @@ public class ARPLayer implements BaseLayer {
 			/* HW Type을 ARP 프로토콜 정보에서 알 수 있다 
 			 * 따라서 ARP Layer에서 하위 레이어의 정보에 접근 가능 
 			 */
-			if(Arrays.equals(HW_TYPE_ETH,receivedHeader.hardwareType))  
+			if(Arrays.equals(ETHERNET.HW_TYPE,receivedHeader.hardwareType))  
 				((EthernetLayer)p_UnderLayer).setDstEthernetAddress(receivedHeader.enetTargetAddr.addr);
 			
 			byte[] header = receivedHeader.makeHeader();
@@ -349,29 +220,23 @@ public class ARPLayer implements BaseLayer {
 			
 			System.out.println("Send ARP Reply");
 		}
+		else { // 나에게 오지 않은 경우, 들어온 쪽을 제외한 나머지 어뎁터로 브로드캐스팅
+
+			for(int i = 0; i < IPLayer.routingIPLayer.size();i++) {
+				if(i == index) continue;
+				IPLayer otherIPLayer = IPLayer.routingIPLayer.get(i);
+				ARPLayer otherARPLayer = (ARPLayer)otherIPLayer.GetUnderLayer(1);
+				
+				otherARPLayer.arpHeader = receivedHeader;
+				otherARPLayer.Send(null,0);
+			}
+		}
+		
+		
+
+		
 		
 		return true;
-	}
-	
-	private void printARPInfo(String who, byte[] ip, byte[] eth) {
-		System.out.print(who + " : [ ETH : ");
-		for(int i = 0; i < 5; i++)
-			System.out.print(String.format("%02X ", eth[i] & 0xff));
-		System.out.print(String.format("%02X", eth[5] & 0xff));
-		System.out.print(", IP : ");
-		for(int i = 0; i < 3; i++)
-			System.out.print(String.format("%d.", (int)(ip[i] & 0xff)));
-		System.out.print(String.format("%d", (int)(ip[3] & 0xff)));
-		System.out.println("]");
-	}
-	/*
-	 * View Update
-	 */
-	private void updateARPCachePanel() {
-		String[] stringData = new String[arpCacheTable.size()];
-		for(int i = 0; i < stringData.length; i++)
-			stringData[i] = arpCacheTable.get(i).toString();
-		ARPTableEventHandlers.updateARPTable(stringData);
 	}
 	
 	
@@ -404,100 +269,7 @@ public class ARPLayer implements BaseLayer {
 		for(int i = 0; i < 4; i++)
 			arpHeader.ipTargetAddr.addr[i] = ipAddress[i];
 	}
-	
-	
-	/*
-	 * ARP Cache Table Functions
-	 * author : 박태현
-	 */
-	
-	private boolean addARPCache(byte[] ipAddr, byte[] ethe) {
-		
-		byte[] ip = new byte[4];
-		System.arraycopy(ipAddr, 0, ip, 0, 4);
-		
-		byte[] ethernet = new byte[6];
-		System.arraycopy(ethe, 0, ethernet, 0, 6);
-		Iterator<ARPCache> iter = arpCacheTable.iterator();
-		
-		while(iter.hasNext()) {
-			ARPCache cache = iter.next();
-			if(Arrays.equals(cache.ip.addr,ip)) {
-				printARPInfo("Remove Cache", cache.ip.addr, cache.ethernet.addr);
-				iter.remove();
-				break;
-			}
-		}
 
-		arpCacheTable.add(new ARPCache(ip,ethernet));
-		
-		iter = arpCacheTable.iterator();
-		while(iter.hasNext()) {
-			ARPCache cache = iter.next();
-			byte[] eth = cache.ethernet.addr;
-			byte[] ipp = cache.ip.addr;
-			if(eth == null) eth = new byte[6];
-			printARPInfo("ARP Cache", ipp, eth);
-		}
-		updateARPCachePanel();
-		return true;
-	}
-
-	public void deleteARPCache(byte[] ip) {
-		
-		Iterator<ARPCache> iter = arpCacheTable.iterator();
-		while(iter.hasNext()) {
-			ARPCache arpCache = iter.next();
-			if(Arrays.equals(arpCache.ip.addr,ip)) {
-				arpCacheTable.remove(arpCache);
-				updateARPCachePanel();
-				return;
-			}
-		}
-		
-		
-	}
-
-	
-	public byte[] getEthernet(byte[] ip) {
-		if(ip != null && ip.length == 4)
-			for(ARPCache arpCache : arpCacheTable) {
-				if(Arrays.equals(arpCache.ip.addr,ip)) {
-					return arpCache.ethernet.addr;
-				}
-			}
-		return null; // not exist
-	}
-	
-	
-	/*
-	 * proxy ARP 저장
-	 * author : Hyoin
-	 * key : device, value: IP Addr + MAC Addr
-	 */
-	public void setProxyTable(String device,byte[] ipAddress, byte[] ethernetAddress){
-		assert(ipAddress.length == 4);
-		assert(ethernetAddress.length == 6);
-		
-		byte [] proxy=new byte[10];
-		for(int i=0;i<4;i++){
-			proxy[i]=ipAddress[i];
-		}
-		for(int i=4;i<10;i++){
-			proxy[i]=ethernetAddress[i-4];
-		}
-		proxyTable.put(device,proxy);		
-	}
-	
-	/*
-	 * proxy ARP 삭제
-	 * author : Hyoin
-	 * key : device, value: IP Addr + MAC Addr
-	 */
-	public void removeProxyTable(String deviceaddr){
-		proxyTable.remove(deviceaddr);
-		System.out.println(proxyTable.size());
-	}
 	
 	@Override
 	public void SetUnderLayer(BaseLayer pUnderLayer) {

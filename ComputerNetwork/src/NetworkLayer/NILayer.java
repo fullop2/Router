@@ -21,39 +21,37 @@ public class NILayer implements BaseLayer {
 
 	int m_iNumAdapter;
 	public Pcap m_AdapterObject;
-	public PcapIf device;
-	public List<PcapIf> m_pAdapterList;
-	StringBuilder errbuf = new StringBuilder();
-	
-	Thread obj;
+	public static List<PcapIf> m_pAdapterList = new ArrayList<PcapIf>();
 	
 	public NILayer(String pName) {
 		// super(pName);
 		pLayerName = pName;
-
-		m_pAdapterList = new ArrayList<PcapIf>();
 		m_iNumAdapter = 0;
-		SetAdapterList();
+		
 	}
 
 	public void PacketStartDriver() {
+		StringBuilder errbuf = new StringBuilder();
 		int snaplen = 64 * 1024; // Capture all packets, no trucation
 		int flags = Pcap.MODE_PROMISCUOUS; // capture all packets
 		int timeout = 10 * 1000; // 10 seconds in millis
+		System.out.println(m_pAdapterList.get(m_iNumAdapter).getDescription());
 		m_AdapterObject = Pcap.openLive(m_pAdapterList.get(m_iNumAdapter).getName(), snaplen, flags, timeout, errbuf);
 	}
 
-	public PcapIf GetAdapterObject(int iIndex) {
+	public static PcapIf GetAdapterObject(int iIndex) {
 		return m_pAdapterList.get(iIndex);
 	}
 
-	public void SetAdapterNumber(int iNum) {
-		m_iNumAdapter = iNum;
+	public void SetRouter(int interfaceNumber) {
+		m_iNumAdapter = interfaceNumber;
 		PacketStartDriver();
 		Receive();
 	}
+	
 
-	public void SetAdapterList() {
+	public static void SetAdapterList() {
+		StringBuilder errbuf = new StringBuilder();
 		int r = Pcap.findAllDevs(m_pAdapterList, errbuf);
 		if (r == Pcap.NOT_OK || m_pAdapterList.isEmpty()) {
 			System.err.printf("Can't read list of devices, error is %s", errbuf.toString());
@@ -61,7 +59,7 @@ public class NILayer implements BaseLayer {
 		}
 	}
 
-	public boolean Send(byte[] input, int length) {
+	public synchronized boolean Send(byte[] input, int length) {
 		
 		ByteBuffer buf = ByteBuffer.wrap(input);
 		if (m_AdapterObject.sendPacket(buf) != Pcap.OK) {
@@ -70,16 +68,11 @@ public class NILayer implements BaseLayer {
 		}
 		return true;
 	}
-	public void stopReceive() {
-		if(obj != null) {
-			obj.interrupt();
-		}
-	}
+	
+	
 	public synchronized boolean Receive() {
 		Receive_Thread thread = new Receive_Thread(m_AdapterObject, this.GetUpperLayer(0));
-		obj = new Thread(thread);
-		obj.start();
-
+		new Thread(thread).start();
 		return false;
 	}
 
@@ -96,7 +89,7 @@ public class NILayer implements BaseLayer {
 		// TODO Auto-generated method stub
 		if (pUpperLayer == null)
 			return;
-		this.p_aUpperLayer.add(nUpperLayerCount++, pUpperLayer);
+		this.p_aUpperLayer.add(nUpperLayerCount++, (BaseLayer)pUpperLayer);
 		// nUpperLayerCount++;
 	}
 
@@ -127,13 +120,14 @@ public class NILayer implements BaseLayer {
 		pUULayer.SetUnderLayer(this);
 
 	}
+
 }
 
 class Receive_Thread implements Runnable {
 	byte[] data;
 	Pcap AdapterObject;
 	BaseLayer UpperLayer;
-
+	
 	public Receive_Thread(Pcap m_AdapterObject, BaseLayer m_UpperLayer) {
 		// TODO Auto-generated constructor stub
 		AdapterObject = m_AdapterObject;

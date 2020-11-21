@@ -97,7 +97,9 @@ public class RouteAddFrame extends JFrame{
 			System.err.printf("Can't read list of devices, error is %s", errbuf.toString());
 			return;
 		}
-		for (int i = 0; i < m_pAdapterList.size(); i++)
-			this.cboInterface.addItem(m_pAdapterList.get(i).getDescription());
+		for (int i = 0; i < m_pAdapterList.size(); i++) {
+			System.out.println(m_pAdapterList.get(i).getName());
+			this.cboInterface.addItem(Integer.toString(i) + m_pAdapterList.get(i).getDescription());
+		}
 	}
 }

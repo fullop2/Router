@@ -5,11 +5,14 @@ import NetworkLayer.EthernetLayer;
 import NetworkLayer.IPLayer;
 import NetworkLayer.LayerManager;
 import NetworkLayer.NILayer;
-import NetworkLayer.TCPLayer;
 import View.AppView;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.jnetpcap.PcapAddr;
+import org.jnetpcap.PcapIf;
 
 import EventHandlers.*;
 
@@ -17,30 +20,49 @@ import EventHandlers.*;
 public class ApplicationController {
 	
 	
-	public void init() {
+	public void init(){
 		new AppView();
-		
-		LayerManager layerManager = new LayerManager();
-		layerManager.AddLayer(new NILayer("NI"));
-		layerManager.AddLayer(new EthernetLayer("Ethernet"));
-		layerManager.AddLayer(new ARPLayer("ARP"));
-		layerManager.AddLayer(new IPLayer("IP"));
-		layerManager.AddLayer(new TCPLayer("TCP"));
-		layerManager.ConnectLayers("NI ( *Ethernet ( *IP ( *TCP ) *ARP ( *IP ) ) )" );
-		
+		NILayer.SetAdapterList();
+		for(int i = 0; i < NILayer.m_pAdapterList.size(); i++) {
+
+			LayerManager layerManager = new LayerManager();
+			
+			NILayer niLayer = new NILayer("NI");
+			EthernetLayer ethernetLayer = new EthernetLayer("Ethernet");
+			ARPLayer arpLayer = new ARPLayer("ARP",i);
+			IPLayer ipLayer = new IPLayer("IP");
+			layerManager.AddLayer(niLayer);
+			layerManager.AddLayer(ethernetLayer);
+			layerManager.AddLayer(arpLayer);
+			layerManager.AddLayer(ipLayer);
+			layerManager.ConnectLayers("NI ( *Ethernet ( *IP  *ARP ( *IP ) ) )" );
+			IPLayer.routingIPLayer.add(ipLayer);
+
+			try {
+				PcapIf pcapIf = NILayer.GetAdapterObject(i);
+				niLayer.SetRouter(i);
+				byte[] addr = pcapIf.getHardwareAddress();
+				ethernetLayer.setSrcEthernetAddress(addr);
+				arpLayer.setMyEthernet(addr);
+				byte[] ip = pcapIf.getAddresses().get(0).getAddr().getData();
+				arpLayer.setMyIP(ip);
+				ipLayer.setMyIP(ip);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 		
 		// initialization event handler in here
 		List<EventHandlers> listEventHandlers = new ArrayList<EventHandlers>();
 		listEventHandlers.add(new ARPTableEventHandlers());
 		listEventHandlers.add(new ProxyARPEventHandlers());
 		listEventHandlers.add(new RoutingTableEventHandlers());
+		listEventHandlers.add(new RouteAddEventHandlers());
 		
 		for(EventHandlers eventHandlers : listEventHandlers) {
-			eventHandlers.setEventHandlers(layerManager);
+			eventHandlers.setEventHandlers();
 		}
-		
-		((NILayer)layerManager.GetLayer("NI")).SetAdapterList();
-		((NILayer)layerManager.GetLayer("NI")).SetAdapterNumber(2);
 	}
 }
 
