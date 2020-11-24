@@ -2,7 +2,9 @@ package EventHandlers;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.lang.reflect.InvocationTargetException;
 
+import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 
 import NetworkLayer.LayerManager;
@@ -23,11 +25,12 @@ public class RoutingTableEventHandlers implements EventHandlers {
 	}
 	
 	
-	public static void add(String[] data) {
-		((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).addRow(data);
+	public synchronized static void add(String[] data){
+		((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).addRow(data);		
 	}
 	
-	public static void remove(int index) {
+	public synchronized static void remove(int index) {
 		((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).removeRow(index);
+
 	}
 }

@@ -15,6 +15,7 @@ import org.jnetpcap.PcapAddr;
 import org.jnetpcap.PcapIf;
 
 import EventHandlers.*;
+import Model.OutgoingQueue;
 
 
 public class ApplicationController {
@@ -22,6 +23,7 @@ public class ApplicationController {
 	
 	public void init(){
 		new AppView();
+		
 		for(int i = 0; i < 2; i++) {
 
 			LayerManager layerManager = new LayerManager();
@@ -36,7 +38,7 @@ public class ApplicationController {
 			layerManager.AddLayer(ipLayer);
 			layerManager.ConnectLayers("NI ( *Ethernet ( *IP  *ARP ( *IP ) ) )" );
 			IPLayer.routingIPLayer.add(ipLayer);
-
+			IPLayer.outgoingQueue = new OutgoingQueue(2);
 			try {
 				niLayer.SetAdapterList();
 				PcapIf pcapIf = niLayer.GetAdapterObject(i);

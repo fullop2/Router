@@ -10,7 +10,7 @@ import java.util.List;
 import EventHandlers.ARPTableEventHandlers;
 
 public class ARP {
-	private static List<ARPCache> arpCacheTable = Collections.synchronizedList(new ArrayList<ARPCache>());
+	private static List<ARPCache> arpCacheTable = new ArrayList<ARPCache>();
 	public static HashMap<String,byte[]> proxyTable=new HashMap<String, byte[]>();
 	
 	
@@ -59,17 +59,17 @@ public class ARP {
 				stringBuffer.append((int)(ip.addr[i] & 0xff)+".");
 			stringBuffer.append((int)(ip.addr[3] & 0xff)+" ");
 			if(Arrays.equals(ETHERNET.NIL, ethernet.addr)) {
-				stringBuffer.append("???????????? ");
+				stringBuffer.append("???????????? ??? ");
 			}
 			else {
 				for(int i = 0; i < 5; i++) {
 					stringBuffer.append(String.format("%02X-", (ethernet.addr[i] & 0xff)).toUpperCase());
 				}
 				stringBuffer.append(String.format("%02X ", (ethernet.addr[5] & 0xff)).toUpperCase());
-
+				stringBuffer.append(interfaceNumber+" ");
 			}
 			
-			stringBuffer.append(interfaceNumber+" ");
+			
 			if(Arrays.equals(ETHERNET.NIL, ethernet.addr)) {
 				stringBuffer.append("incompleted");
 			}
@@ -97,9 +97,7 @@ public class ARP {
 		@Override
 		public void run() {
 			while(true) {
-				try {
-					Thread.sleep(1000);
-					
+				synchronized(arpCacheTable) {
 					long timeElipse = System.currentTimeMillis() - beforeTime;
 					beforeTime =  System.currentTimeMillis();
 					int index = 0;
@@ -115,9 +113,14 @@ public class ARP {
 							index++;
 						}
 					}
+				}
+				try {	
+					Thread.sleep(1000);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
-				}
+				}				
+					
+								
 			}
 		}
 	}
@@ -129,69 +132,72 @@ public class ARP {
 		
 		byte[] ethernet = new byte[6];
 		System.arraycopy(ethe, 0, ethernet, 0, 6);
-		Iterator<ARPCache> iter = arpCacheTable.iterator();
 		
-		int index = 0;
-		while(iter.hasNext()) {
-			ARPCache cache = iter.next();
-			if(Arrays.equals(cache.ip.addr,ip)) {
-				printARPInfo("Remove Cache", cache.ip.addr, cache.ethernet.addr);
-				iter.remove();
-				ARPTableEventHandlers.remove(index);
-				break;
+		synchronized(arpCacheTable) {
+			Iterator<ARPCache> iter = arpCacheTable.iterator();
+			
+			int index = 0;
+			while(iter.hasNext()) {
+				ARPCache cache = iter.next();
+				if(Arrays.equals(cache.ip.addr,ip)) {
+					//printARPInfo("Remove Cache", cache.ip.addr, cache.ethernet.addr);
+					iter.remove();
+					ARPTableEventHandlers.remove(index);
+					break;
+				}
+				index++;
 			}
-			index++;
-		}
-		
-		ARPCache currentCache = new ARPCache(ip,ethernet,interfaceNumber);
-		arpCacheTable.add(currentCache);
-		
-		iter = arpCacheTable.iterator();
-		while(iter.hasNext()) {
-			ARPCache cache = iter.next();
-			byte[] eth = cache.ethernet.addr;
-			byte[] ipp = cache.ip.addr;
-			if(eth == null) eth = new byte[6];
-			printARPInfo("ARP Cache", ipp, eth);
-		}
-		
-		ARPTableEventHandlers.add(currentCache.toString().split(" "));
+			ARPCache currentCache = new ARPCache(ip,ethernet,interfaceNumber);
+			arpCacheTable.add(currentCache);
+			ARPTableEventHandlers.add(currentCache.toString().split(" "));
+		}		
 		return true;
 	}
 
 	public void deleteARPCache(byte[] ip) {
-		
-		Iterator<ARPCache> iter = arpCacheTable.iterator();
-		int index = 0;
-		while(iter.hasNext()) {
-			ARPCache arpCache = iter.next();
-			if(Arrays.equals(arpCache.ip.addr,ip)) {
-				arpCacheTable.remove(arpCache);
-				ARPTableEventHandlers.remove(index);
-				index++;
-				return;
+		synchronized(arpCacheTable) {
+			Iterator<ARPCache> iter = arpCacheTable.iterator();
+			int index = 0;
+			while(iter.hasNext()) {
+				ARPCache arpCache = iter.next();
+				if(Arrays.equals(arpCache.ip.addr,ip)) {
+					arpCacheTable.remove(arpCache);
+					ARPTableEventHandlers.remove(index);
+					index++;
+					return;
+				}
 			}
 		}
 	}
 
 	
 	public byte[] getEthernet(byte[] ip) {
-		if(ip != null && ip.length == 4)
-			for(ARPCache arpCache : arpCacheTable) {
-				if(Arrays.equals(arpCache.ip.addr,ip)) {
-					return arpCache.ethernet.addr;
+		synchronized(arpCacheTable) {
+			if(ip != null && ip.length == 4)
+				for(ARPCache arpCache : arpCacheTable) {
+					if(Arrays.equals(arpCache.ip.addr,ip)) {
+						return arpCache.ethernet.addr;
+					}
 				}
-			}
+		}
 		return null; // not exist
 	}
 	
 	public int getInterface(byte[] ip) {
-		if(ip != null && ip.length == 4)
-			for(ARPCache arpCache : arpCacheTable) {
-				if(Arrays.equals(arpCache.ip.addr,ip)) {
-					return arpCache.interfaceNumber;
+		synchronized(arpCacheTable) {
+			if(ip != null && ip.length == 4)
+				for(ARPCache arpCache : arpCacheTable) {
+					if(Arrays.equals(arpCache.ip.addr,ip)) {
+						if(Arrays.equals(arpCache.ethernet.addr, ETHERNET.NIL)) { // ARP Reply not received yet.
+							return -2;
+						}
+						else {
+							return arpCache.interfaceNumber;
+						}
+					}
+					 
 				}
-			}
+		}
 		return -1; // not exist
 	}
 		

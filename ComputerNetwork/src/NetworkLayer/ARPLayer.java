@@ -21,6 +21,134 @@ public class ARPLayer implements BaseLayer {
 	public _IP_ADDR myIP;
 	public _ETHERNET_ADDR myETH;	
 	
+
+
+	_ARP_HEADER arpHeader = new _ARP_HEADER();
+	
+	
+	public ARPLayer(String string, int interfaceNumber) {
+		pLayerName = string;
+		index = interfaceNumber;
+		myIP = new _IP_ADDR();
+		myETH = new _ETHERNET_ADDR();
+	}
+  	
+	public void setMyIP(byte[] ip) {
+		System.arraycopy(ip, 0, myIP.addr, 0, 4);
+	}
+	public void setMyEthernet(byte[] eth) {
+		System.arraycopy(eth, 0, myETH.addr, 0, 6);
+	}
+	
+	private boolean isRequest(byte[] opcode) {
+		return (opcode[0] == (byte)0x00) && (opcode[1] == (byte)0x01);
+	}
+	private boolean isReply(byte[] opcode) {
+		return (opcode[0] == (byte)0x00) && (opcode[1] == (byte)0x02);
+	}
+	
+	private boolean isMine(byte[] ipAddr) {
+		return Arrays.equals(myIP.addr, ipAddr);
+	}
+	private boolean isNIL(byte[] ethernetAddr){
+		return Arrays.equals(ETHERNET.NIL, ethernetAddr);
+	}
+	
+	private boolean isGARP(_ARP_HEADER header){
+		return Arrays.equals(header.ipSenderAddr.addr, header.ipTargetAddr.addr) && isNIL(header.enetTargetAddr.addr);
+	}
+	
+	private boolean needProxy(_ARP_HEADER header){
+		return arp.hasIPInProxyTable(header.ipTargetAddr.addr) && isNIL(header.enetTargetAddr.addr);
+	}
+	
+	public synchronized boolean Send(byte[] input, int length) {
+		
+		if(isMine(arpHeader.ipTargetAddr.addr)) {// 메세지 수신자가 나인 경우 아무것도 하지 않음
+			return true;
+		}
+		arp.addARPCache(arpHeader.ipTargetAddr.addr, ETHERNET.NIL, index);
+
+		
+		byte[] header = arpHeader.makeHeader();
+		p_UnderLayer.Send(header,header.length);
+		
+//		System.out.println("SEND ARP\n");
+		return false;
+	}
+	public synchronized boolean Receive(byte[] input) {
+		_ARP_HEADER receivedHeader = new _ARP_HEADER(input);
+		
+		if(isMine(receivedHeader.ipSenderAddr.addr)) {// 메세지 전송자가 나인 경우 아무것도 하지 않음
+			return true;
+		}
+		System.out.println("RECV ARP");
+		arp.addARPCache(receivedHeader.ipSenderAddr.addr, receivedHeader.enetSenderAddr.addr, index);
+		
+		if(isRequest(receivedHeader.opcode)) {
+			
+			
+			EthernetLayer ethernetLayer = ((EthernetLayer)p_UnderLayer);
+			ethernetLayer.setDstEthernetAddress(receivedHeader.enetSenderAddr.addr);
+			ethernetLayer.setEthernetType(ETHERNET.PROT_ARP);
+			
+			byte[] targetIP = new byte[4];
+			byte[] targetETH = new byte[6];
+			
+			System.arraycopy(receivedHeader.ipTargetAddr.addr, 0, targetIP, 0, 4);
+			System.arraycopy(receivedHeader.enetTargetAddr.addr, 0, targetETH, 0, 6);
+			
+			System.arraycopy(receivedHeader.ipSenderAddr.addr, 0, receivedHeader.ipTargetAddr.addr, 0, 4);
+			System.arraycopy(receivedHeader.enetSenderAddr.addr, 0, receivedHeader.enetTargetAddr.addr, 0, 6);
+			
+			System.arraycopy(targetIP, 0, receivedHeader.ipSenderAddr.addr, 0, 4);
+			System.arraycopy(myETH.addr, 0, receivedHeader.enetSenderAddr.addr, 0, 6);
+			
+			receivedHeader.opcode[1] = 2;
+			
+			byte[] header = receivedHeader.makeHeader();
+			
+			
+			p_UnderLayer.Send(header, header.length);
+		}
+		
+		
+//		System.out.println("RECV ARP\n");
+		
+		return true;
+	}
+	
+	
+	public void setOpcode(byte[] opcode) {
+		assert(opcode.length == 2);
+		arpHeader.opcode[0] = opcode[0];
+		arpHeader.opcode[1] = opcode[1];
+	}
+	
+	public void setEthernetSenderAddress(byte[] ethernetAddress) {
+		assert(ethernetAddress.length == 6);
+		for(int i = 0; i < 6; i++)
+			arpHeader.enetSenderAddr.addr[i] = ethernetAddress[i];
+	}
+	
+	public void setIPSenderAddress(byte[] ipAddress) {
+		assert(ipAddress.length == 4);
+		for(int i = 0; i < 4; i++)
+			arpHeader.ipSenderAddr.addr[i] = ipAddress[i];
+	}
+	
+	public void setEthernetTargetAddress(byte[] ethernetAddress) {
+		assert(ethernetAddress.length == 6);
+		for(int i = 0; i < 6; i++)
+			arpHeader.enetTargetAddr.addr[i] = ethernetAddress[i];
+	}
+	
+	public void setIPTargetAddress(byte[] ipAddress) {
+		assert(ipAddress.length == 4);
+		for(int i = 0; i < 4; i++)
+			arpHeader.ipTargetAddr.addr[i] = ipAddress[i];
+	}
+
 	@SuppressWarnings("unused")
 	private class _ARP_HEADER {
 		byte[] hardwareType;
@@ -92,89 +220,6 @@ public class ARPLayer implements BaseLayer {
 			return header;
 		}
 	}
-
-	_ARP_HEADER arpHeader = new _ARP_HEADER();
-	
-	
-	public ARPLayer(String string, int interfaceNumber) {
-		pLayerName = string;
-		index = interfaceNumber;
-		myIP = new _IP_ADDR();
-		myETH = new _ETHERNET_ADDR();
-	}
-  	
-	public void setMyIP(byte[] ip) {
-		System.arraycopy(ip, 0, myIP.addr, 0, 4);
-	}
-	public void setMyEthernet(byte[] eth) {
-		System.arraycopy(eth, 0, myETH.addr, 0, 6);
-	}
-	
-	private boolean isRequest(byte[] opcode) {
-		return (opcode[0] == (byte)0x00) && (opcode[1] == (byte)0x01);
-	}
-	
-	private boolean isMine(byte[] ipAddr) {
-		return Arrays.equals(myIP.addr, ipAddr);
-	}
-	private boolean isNIL(byte[] ethernetAddr){
-		return Arrays.equals(ETHERNET.NIL, ethernetAddr);
-	}
-	
-	private boolean isGARP(_ARP_HEADER header){
-		return Arrays.equals(header.ipSenderAddr.addr, header.ipTargetAddr.addr) && isNIL(header.enetTargetAddr.addr);
-	}
-	
-	private boolean needProxy(_ARP_HEADER header){
-		return arp.hasIPInProxyTable(header.ipTargetAddr.addr) && isNIL(header.enetTargetAddr.addr);
-	}
-
-	public synchronized boolean Receive(byte[] input) {
-		_ARP_HEADER receivedHeader = new _ARP_HEADER(input);
-		
-		if(isMine(receivedHeader.ipSenderAddr.addr)) {// 메세지 전송자가 나인 경우 아무것도 하지 않음
-			return true;
-		}
-		
-		System.out.println("ARP RECV [");
-		ARP.printARPInfo("\tSender", receivedHeader.ipSenderAddr.addr, receivedHeader.enetSenderAddr.addr);
-		ARP.printARPInfo("\tTarget", receivedHeader.ipTargetAddr.addr, receivedHeader.enetTargetAddr.addr);
-		System.out.println("]\n");
-		
-		return true;
-	}
-	
-	
-	public void setOpcode(byte[] opcode) {
-		assert(opcode.length == 2);
-		arpHeader.opcode[0] = opcode[0];
-		arpHeader.opcode[1] = opcode[1];
-	}
-	
-	public void setEthernetSenderAddress(byte[] ethernetAddress) {
-		assert(ethernetAddress.length == 6);
-		for(int i = 0; i < 6; i++)
-			arpHeader.enetSenderAddr.addr[i] = ethernetAddress[i];
-	}
-	
-	public void setIPSenderAddress(byte[] ipAddress) {
-		assert(ipAddress.length == 4);
-		for(int i = 0; i < 4; i++)
-			arpHeader.ipSenderAddr.addr[i] = ipAddress[i];
-	}
-	
-	public void setEthernetTargetAddress(byte[] ethernetAddress) {
-		assert(ethernetAddress.length == 6);
-		for(int i = 0; i < 6; i++)
-			arpHeader.enetTargetAddr.addr[i] = ethernetAddress[i];
-	}
-	
-	public void setIPTargetAddress(byte[] ipAddress) {
-		assert(ipAddress.length == 4);
-		for(int i = 0; i < 4; i++)
-			arpHeader.ipTargetAddr.addr[i] = ipAddress[i];
-	}
-
 	
 	@Override
 	public void SetUnderLayer(BaseLayer pUnderLayer) {

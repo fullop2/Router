@@ -25,8 +25,6 @@ public class NILayer implements BaseLayer {
 	public List<PcapIf> m_pAdapterList;
 	StringBuilder errbuf = new StringBuilder();
 	
-	Thread obj;
-	
 	public NILayer(String pName) {
 		// super(pName);
 		pLayerName = pName;
@@ -70,14 +68,11 @@ public class NILayer implements BaseLayer {
 		}
 		return true;
 	}
-	public void stopReceive() {
-		if(obj != null) {
-			obj.interrupt();
-		}
-	}
+
 	public synchronized boolean Receive() {
 		Receive_Thread thread = new Receive_Thread(m_AdapterObject, this.GetUpperLayer(0));
-		obj = new Thread(thread);
+		Thread obj = new Thread(thread);
+		obj.setName("Adapter"+m_iNumAdapter);
 		obj.start();
 
 		return false;
@@ -150,7 +145,7 @@ class Receive_Thread implements Runnable {
 				}
 			};
 
-			AdapterObject.loop(1000, jpacketHandler, "");
+			AdapterObject.loop(100, jpacketHandler, "");
 		}
 	}
 }

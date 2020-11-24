@@ -15,7 +15,6 @@ import View.ARPCachePanel;
 import View.StaticRoutingTablePanel;
 
 public class ARPTableEventHandlers implements EventHandlers {
-	private static DefaultTableModel ArpTableModel;
 		
 	@Override
 	public void setEventHandlers() {

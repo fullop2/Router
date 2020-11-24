@@ -60,7 +60,6 @@ public class EthernetLayer implements BaseLayer {
 
 	public void setSrcEthernetAddress(byte[] ethernetAddress) {
 		assert(ethernetAddress.length == 6);
-		assert(ethernetAddress.length == 6);
 		System.arraycopy(ethernetAddress, 0, ethernetHeader.enetSrcAddr.addr, 0, 6);
 	}
 	
@@ -82,6 +81,20 @@ public class EthernetLayer implements BaseLayer {
 	}
 	
 	@Override
+	public synchronized boolean Send(byte[] input, int length) {
+		byte[] frame = new byte[14+length];
+		byte[] header = ethernetHeader.makeHeader();
+		
+		System.arraycopy(header, 0, frame, 0, 14);
+		System.arraycopy(input, 0, frame, 14, length);
+		
+//		System.out.println("SEND ETH");
+		p_UnderLayer.Send(frame,frame.length);
+		
+		return true;
+	}
+	
+	@Override
 	public synchronized boolean Receive(byte[] input) {
 		_ETHERNET_HEADER receiveHeader = new _ETHERNET_HEADER(input);
 		
@@ -90,16 +103,16 @@ public class EthernetLayer implements BaseLayer {
 			byte[] data = new byte[input.length-14];
 			System.arraycopy(input, 14, data, 0, input.length-14);
 			if(isARP(receiveHeader.type)) {
-				printMACInfo("ETH RECV", receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
+//				System.out.println("RECV ETH");
+//				printMACInfo("ETH RECV", receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
 				p_aUpperLayer.get(1).Receive(data);
 			}
 			else if(isIP(receiveHeader.type)) {
-				printMACInfo("ETH RECV", receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
+//				System.out.println("RECV ETH");
+//				printMACInfo("ETH RECV", receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
 				p_aUpperLayer.get(0).Receive(data);
 			}
 		}
-		
-		
 		return true;
 	}
 

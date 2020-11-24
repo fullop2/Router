@@ -34,14 +34,16 @@ public class Router {
 		return masked;
 	}
 	
-	int countMatchAddr(byte[] masked, byte[] dest) {
+	int countMatchAddr(byte[] masked) {
 		
 		int count = 0;
 		for(int i = 0; i < 4; i++) {
 			byte temp = 0x00000001;
 			for(int j = 0; j < 8; j++) {
-				if((byte)(temp & masked[i]) == (byte)(temp & dest[i]))
+				if((byte)(temp & masked[i]) == 1)
 					count++;
+				else
+					break;
 				temp = (byte) (temp << 1);
 			}
 		}
@@ -56,7 +58,7 @@ public class Router {
 			byte[] masked = masking(addr, route.netMask.addr);
 			
 			if(Arrays.equals(route.destination.addr, masked)) {
-				int tmpCount = countMatchAddr(masked, route.destination.addr);
+				int tmpCount = countMatchAddr(masked);
 				maxMatched = Math.max(maxMatched, tmpCount);
 				foundRoute = route;
 			}

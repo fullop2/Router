@@ -9,6 +9,7 @@ import org.jnetpcap.packet.PcapPacket;
 import org.jnetpcap.packet.PcapPacketHandler;
 
 import Model.ETHERNET;
+import Model.OutgoingQueue;
 import Model.Route;
 import Model.Router;
 import Model._IP_ADDR;
@@ -21,10 +22,139 @@ public class IPLayer implements BaseLayer {
 	
 	public static List<IPLayer> routingIPLayer = new ArrayList<IPLayer>();
 	public static Router router = new Router();
-	
+	public static OutgoingQueue outgoingQueue;
 	public _IP_ADDR myIP;
 	
-	@SuppressWarnings("unused")
+	public IPLayer(String string) {
+		pLayerName = string;
+		myIP = new _IP_ADDR();
+	}
+
+	void setIPDstAddr(_IP_HEADER ipHeader, byte[] addr) {
+		for(int i = 0; i < 4; i++)
+			ipHeader.ipDstAddr.addr[i] = addr[i];
+	}
+	
+	void setIPSrcAddr(_IP_HEADER ipHeader, byte[] addr) {
+		for(int i = 0; i < 4; i++)
+			ipHeader.ipSrcAddr.addr[i] = addr[i];
+	}
+	
+	public void setMyIP(byte[] ip) {
+		System.arraycopy(ip, 0, myIP.addr, 0, 4);
+	}
+	
+	// 해당 ip가 내 ip인지 확인
+	private boolean isMine(byte[] ip) {
+		return Arrays.equals(myIP.addr, ip);
+	}
+	
+	private boolean versionValid(byte versionLength) {
+		return versionLength == 0x04;
+	}
+	private boolean lengthValid(byte versionLength) {
+		return versionLength == 0x05;
+	}
+	
+
+	
+	@Override
+	public boolean Receive(byte[] input) {
+		if(input.length < 20)
+			return false;
+		
+		_IP_HEADER receiveHeader = new _IP_HEADER(input);
+		if(versionValid(receiveHeader.VER) && lengthValid(receiveHeader.HLEN)) {
+			if(isMine(receiveHeader.ipSrcAddr.addr))
+				return false;
+			else {
+				System.out.println("RECV IP");
+//				// 다른 IP Layer로 이동				
+				Route route = router.getRoute(receiveHeader.ipDstAddr.addr);
+				if(route._interface == -1) { // unreachable
+					return false;
+				}
+				else {
+					
+					byte[] destination = new byte[4];
+					if(route.flag == 6) { // UG : connected to gateway
+						System.arraycopy(route.gateway.addr, 0, destination, 0, 4);
+					}
+					else if(route.flag == 4) { // U : connected direct (host)
+						System.arraycopy(receiveHeader.ipDstAddr.addr, 0, destination, 0, 4);
+					}
+					else {
+						return false;
+					}
+					
+					// 목적지에 대한 MAC 정보가 없는 경우
+					byte[] foundedMAC = ARPLayer.arp.getEthernet(destination);
+					if(foundedMAC == null || Arrays.equals(foundedMAC, ETHERNET.NIL)) {
+						
+						// 현재 어뎁터를 제외한 나머지 어뎁터에 ARP를 보냄
+						for(int i = 0; i < IPLayer.routingIPLayer.size();i++) {
+							IPLayer ipLayer = IPLayer.routingIPLayer.get(i);
+							ARPLayer otherARPLayer = (ARPLayer)ipLayer.GetUnderLayer(1);
+							
+							/*
+							 * Sender IP : 라우터의 다른 어뎁터의 IP
+							 * Sender ETH : 라우터의 다른 어뎁터 MAC
+							 * Target IP : 찾을 Gateway IP
+							 * Target ETH : 브로드캐스팅
+							 */
+							otherARPLayer.setIPSenderAddress(otherARPLayer.myIP.addr);
+							otherARPLayer.setEthernetSenderAddress(otherARPLayer.myETH.addr);
+							otherARPLayer.setIPTargetAddress(destination);
+							otherARPLayer.setEthernetTargetAddress(ETHERNET.BROADCAST);
+							
+							EthernetLayer otherEthernetLayer = (EthernetLayer)otherARPLayer.GetUnderLayer();
+							otherEthernetLayer.setDstEthernetAddress(ETHERNET.NIL);
+							otherEthernetLayer.setEthernetType(ETHERNET.PROT_ARP);
+							
+							otherARPLayer.Send(null,0);
+							// 패킷을 저장해두고 스레드 시작
+							outgoingQueue.add(i, destination, input);
+						}
+						return false;	
+					}
+					else {
+						outgoingQueue.add(route._interface, destination, input);
+//						routingIPLayer.get(route._interface).Send(input, input.length);
+						return true;
+					}
+				}
+			}
+				
+		}
+		return false;
+		
+	}
+
+	
+	public boolean Send(byte[] input, int length) {
+		
+		_IP_HEADER header = new _IP_HEADER(input);
+		ARPLayer arp = (ARPLayer)p_aUnderLayer.get(1);
+		EthernetLayer ethernetLayer = (EthernetLayer)p_aUnderLayer.get(0);
+		ethernetLayer.setDstEthernetAddress(arp.arp.getEthernet(header.ipDstAddr.addr));
+		ethernetLayer.setEthernetType(ETHERNET.PROT_IP);
+		return p_aUnderLayer.get(0).Send(input, input.length);		
+		
+	}
+	
+//	public synchronized static void printIPInfo(String msg, byte[] send, byte[] recv) {
+//		System.out.print(msg + " [ SRC : ");
+//		for(int i = 0; i < 3; i++)
+//			System.out.print(String.format("%d.", (int)(send[i] & 0xff)));
+//		System.out.print(String.format("%d", (int)(send[3] & 0xff)));
+//		System.out.print(", DST : ");
+//		for(int i = 0; i < 3; i++)
+//			System.out.print(String.format("%d.", (int)(recv[i] & 0xff)));
+//		System.out.print(String.format("%d", (int)(recv[3] & 0xff)));
+//		System.out.println("]");
+//		System.out.println();
+//	}
+	
 	private class _IP_HEADER {
 		byte VER;
 		byte HLEN;
@@ -126,65 +256,6 @@ public class IPLayer implements BaseLayer {
 		}
 	}
 	
-//	private _IP_HEADER ipHeader = new _IP_HEADER();
-	
-	public IPLayer(String string) {
-		pLayerName = string;
-		myIP = new _IP_ADDR();
-	}
-
-	void setIPDstAddr(_IP_HEADER ipHeader, byte[] addr) {
-		for(int i = 0; i < 4; i++)
-			ipHeader.ipDstAddr.addr[i] = addr[i];
-	}
-	
-	void setIPSrcAddr(_IP_HEADER ipHeader, byte[] addr) {
-		for(int i = 0; i < 4; i++)
-			ipHeader.ipSrcAddr.addr[i] = addr[i];
-	}
-	
-	public void setMyIP(byte[] ip) {
-		System.arraycopy(ip, 0, myIP.addr, 0, 4);
-	}
-	
-	// 해당 ip가 내 ip인지 확인
-	private boolean isMine(byte[] ip) {
-		return Arrays.equals(myIP.addr, ip);
-	}
-	
-	private boolean versionValid(byte versionLength) {
-		return versionLength == 0x04;
-	}
-	private boolean lengthValid(byte versionLength) {
-		return versionLength == 0x05;
-	}
-	
-	@Override
-	public synchronized boolean Receive(byte[] input) {
-
-		if(input.length < 20)
-			return false;
-		
-		_IP_HEADER receiveHeader = new _IP_HEADER(input);
-		if(versionValid(receiveHeader.VER) && lengthValid(receiveHeader.HLEN)) {
-			printIPInfo("IP RECV", receiveHeader.ipSrcAddr.addr, receiveHeader.ipDstAddr.addr);				
-		}
-		return false;
-		
-	}
-	
-	public synchronized static void printIPInfo(String msg, byte[] send, byte[] recv) {
-		System.out.print(msg + " [ SRC : ");
-		for(int i = 0; i < 3; i++)
-			System.out.print(String.format("%d.", (int)(send[i] & 0xff)));
-		System.out.print(String.format("%d", (int)(send[3] & 0xff)));
-		System.out.print(", DST : ");
-		for(int i = 0; i < 3; i++)
-			System.out.print(String.format("%d.", (int)(recv[i] & 0xff)));
-		System.out.print(String.format("%d", (int)(recv[3] & 0xff)));
-		System.out.println("]");
-		System.out.println();
-	}
 	
 	@Override
 	public void SetUnderLayer(BaseLayer pUnderLayer) {
