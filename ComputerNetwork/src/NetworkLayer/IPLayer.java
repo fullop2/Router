@@ -68,7 +68,7 @@ public class IPLayer implements BaseLayer {
 			if(isMine(receiveHeader.ipSrcAddr.addr))
 				return false;
 			else {
-				System.out.println("RECV IP");
+//				System.out.println("RECV IP");
 //				// 다른 IP Layer로 이동				
 				Route route = router.getRoute(receiveHeader.ipDstAddr.addr);
 				if(route._interface == -1) { // unreachable
@@ -92,8 +92,10 @@ public class IPLayer implements BaseLayer {
 					if(foundedMAC == null || Arrays.equals(foundedMAC, ETHERNET.NIL)) {
 						
 						// 현재 어뎁터를 제외한 나머지 어뎁터에 ARP를 보냄
+						// 현재 어뎁터에서 왔으므로 생략
 						for(int i = 0; i < IPLayer.routingIPLayer.size();i++) {
 							IPLayer ipLayer = IPLayer.routingIPLayer.get(i);
+							if(ipLayer == this) continue;
 							ARPLayer otherARPLayer = (ARPLayer)ipLayer.GetUnderLayer(1);
 							
 							/*

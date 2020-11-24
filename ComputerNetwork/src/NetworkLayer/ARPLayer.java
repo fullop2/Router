@@ -82,7 +82,7 @@ public class ARPLayer implements BaseLayer {
 		if(isMine(receivedHeader.ipSenderAddr.addr)) {// 메세지 전송자가 나인 경우 아무것도 하지 않음
 			return true;
 		}
-		System.out.println("RECV ARP");
+//		System.out.println("RECV ARP");
 		arp.addARPCache(receivedHeader.ipSenderAddr.addr, receivedHeader.enetSenderAddr.addr, index);
 		
 		if(isRequest(receivedHeader.opcode)) {
