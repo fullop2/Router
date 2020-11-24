@@ -26,11 +26,23 @@ public class RoutingTableEventHandlers implements EventHandlers {
 	
 	
 	public synchronized static void add(String[] data){
-		((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).addRow(data);		
+		StaticRoutingTablePanel.btnAddRoute.setEnabled(false);
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).addRow(data);		
+				StaticRoutingTablePanel.btnAddRoute.setEnabled(true);
+			}
+		});
+		
 	}
 	
 	public synchronized static void remove(int index) {
-		((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).removeRow(index);
-
+		StaticRoutingTablePanel.btnDeleteRoute.setEnabled(false);
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).removeRow(index);
+				StaticRoutingTablePanel.btnDeleteRoute.setEnabled(true);
+			}
+		});
 	}
 }

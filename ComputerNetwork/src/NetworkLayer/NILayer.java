@@ -145,7 +145,7 @@ class Receive_Thread implements Runnable {
 				}
 			};
 
-			AdapterObject.loop(100, jpacketHandler, "");
+			AdapterObject.loop(10, jpacketHandler, "");
 		}
 	}
 }

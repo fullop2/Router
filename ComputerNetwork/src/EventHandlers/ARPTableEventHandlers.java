@@ -5,6 +5,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.StringTokenizer;
 
+import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 
 import NetworkLayer.ARPLayer;
@@ -33,10 +34,23 @@ public class ARPTableEventHandlers implements EventHandlers {
 	}
 
 	public static synchronized void add(String[] data) {
-		((DefaultTableModel)ARPCachePanel.table.getModel()).addRow(data);
+		ARPCachePanel.btnDelete.setEnabled(false);
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				((DefaultTableModel)ARPCachePanel.table.getModel()).addRow(data);
+				ARPCachePanel.btnDelete.setEnabled(true);
+			}
+		});
 	}
 	
 	public static synchronized void remove(int index) {
-		((DefaultTableModel)ARPCachePanel.table.getModel()).removeRow(index);
+		ARPCachePanel.btnDelete.setEnabled(false);
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				((DefaultTableModel)ARPCachePanel.table.getModel()).removeRow(index);
+				ARPCachePanel.btnDelete.setEnabled(true);
+			}
+		});
+		
 	}
 }

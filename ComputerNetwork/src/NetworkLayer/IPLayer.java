@@ -95,7 +95,7 @@ public class IPLayer implements BaseLayer {
 						// 현재 어뎁터에서 왔으므로 생략
 						for(int i = 0; i < IPLayer.routingIPLayer.size();i++) {
 							IPLayer ipLayer = IPLayer.routingIPLayer.get(i);
-							if(ipLayer == this) continue;
+//							if(ipLayer == this) continue;
 							ARPLayer otherARPLayer = (ARPLayer)ipLayer.GetUnderLayer(1);
 							
 							/*

@@ -163,9 +163,9 @@ public class ARP {
 				if(Arrays.equals(arpCache.ip.addr,ip)) {
 					arpCacheTable.remove(arpCache);
 					ARPTableEventHandlers.remove(index);
-					index++;
 					return;
 				}
+				index++;
 			}
 		}
 	}
