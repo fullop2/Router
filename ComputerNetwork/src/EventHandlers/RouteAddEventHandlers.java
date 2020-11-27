@@ -29,8 +29,7 @@ public class RouteAddEventHandlers implements EventHandlers {
 				boolean isGateway = RouteAddFrame.chkGateway.isSelected();
 				boolean isHost = RouteAddFrame.chkHost.isSelected();			
 	
-				int flag = 7;
-				flag = flag & (isUp ? 4 : 7) & (isGateway? 2 : 7) & (isHost? 1 : 7);
+				int flag = (isUp ? 4 : 0) | (isGateway? 2 : 0) | (isHost? 1 : 0);
 				
 				int _int = RouteAddFrame.cboInterface.getSelectedIndex();
 				

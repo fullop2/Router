@@ -65,7 +65,7 @@ public class IPLayer implements BaseLayer {
 		
 		_IP_HEADER receiveHeader = new _IP_HEADER(input);
 		if(versionValid(receiveHeader.VER) && lengthValid(receiveHeader.HLEN)) {
-			if(isMine(receiveHeader.ipSrcAddr.addr))
+			if(isMine(receiveHeader.ipSrcAddr.addr) || isMine(receiveHeader.ipDstAddr.addr))
 				return false;
 			else {
 //				System.out.println("RECV IP");
@@ -80,7 +80,7 @@ public class IPLayer implements BaseLayer {
 					if(route.flag == 6) { // UG : connected to gateway
 						System.arraycopy(route.gateway.addr, 0, destination, 0, 4);
 					}
-					else if(route.flag == 4) { // U : connected direct (host)
+					else if(route.flag == 5) { // UH : connected direct host
 						System.arraycopy(receiveHeader.ipDstAddr.addr, 0, destination, 0, 4);
 					}
 					else {

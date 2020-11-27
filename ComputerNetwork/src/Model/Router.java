@@ -2,7 +2,13 @@ package Model;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
+
+import EventHandlers.ARPTableEventHandlers;
+import EventHandlers.RoutingTableEventHandlers;
+import Model.ARP.ARPCache;
+import View.StaticRoutingTablePanel;
 
 public class Router {
 	
@@ -23,8 +29,20 @@ public class Router {
 		routeList.add(new Route(dest,netmask, gateway, flag, _interface, metric));
 	}
 	
-	void remove(int index) {
-		routeList.remove(index);
+	public synchronized void remove(byte[] ip) {
+		synchronized(routeList) {
+			Iterator<Route> iter = routeList.iterator();
+			int index = 0;
+			while(iter.hasNext()) {
+				Route route = iter.next();
+				if(Arrays.equals(route.destination.addr,ip)) {
+					iter.remove();
+					RoutingTableEventHandlers.remove(index);
+					return;
+				}
+				index++;
+			}
+		}
 	}
 	
 	byte[] masking(byte[] addr, byte[] mask) {		
@@ -35,19 +53,15 @@ public class Router {
 	}
 	
 	int countMatchAddr(byte[] masked) {
-		
 		int count = 0;
 		for(int i = 0; i < 4; i++) {
-			byte temp = 0x00000001;
+			byte subMask = masked[i];
 			for(int j = 0; j < 8; j++) {
-				if((byte)(temp & masked[i]) == 1)
+				if((0x00000001 & subMask) == 1)
 					count++;
-				else
-					break;
-				temp = (byte) (temp << 1);
+				subMask = (byte) (subMask >> 1);
 			}
 		}
-		
 		return count;
 	}
 	
@@ -58,7 +72,7 @@ public class Router {
 			byte[] masked = masking(addr, route.netMask.addr);
 			
 			if(Arrays.equals(route.destination.addr, masked)) {
-				int tmpCount = countMatchAddr(masked);
+				int tmpCount = countMatchAddr(route.netMask.addr);
 				maxMatched = Math.max(maxMatched, tmpCount);
 				foundRoute = route;
 			}

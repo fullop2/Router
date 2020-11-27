@@ -7,6 +7,8 @@ import java.lang.reflect.InvocationTargetException;
 import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 
+import NetworkLayer.ARPLayer;
+import NetworkLayer.IPLayer;
 import NetworkLayer.LayerManager;
 import View.ARPCachePanel;
 import View.StaticRoutingTablePanel;
@@ -22,8 +24,22 @@ public class RoutingTableEventHandlers implements EventHandlers {
 			}
 		
 		});
+		
+		StaticRoutingTablePanel.btnDeleteRoute.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				
+				int row = StaticRoutingTablePanel.RoutingTable.getSelectedRow();
+				if(row < 0) return;
+				String data = StaticRoutingTablePanel.RoutingTable.getValueAt(row, 0).toString();
+				if(data == null) return;
+				
+				IPLayer.router.remove(Address.ip(data));
+				
+			}
+		
+		});
 	}
-	
 	
 	public synchronized static void add(String[] data){
 		StaticRoutingTablePanel.btnAddRoute.setEnabled(false);
@@ -40,7 +56,7 @@ public class RoutingTableEventHandlers implements EventHandlers {
 		StaticRoutingTablePanel.btnDeleteRoute.setEnabled(false);
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
-				((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).removeRow(index);
+				((DefaultTableModel)StaticRoutingTablePanel.RoutingTable.getModel()).removeRow(index-1);
 				StaticRoutingTablePanel.btnDeleteRoute.setEnabled(true);
 			}
 		});
