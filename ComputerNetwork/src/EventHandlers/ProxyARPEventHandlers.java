@@ -20,7 +20,7 @@ public class ProxyARPEventHandlers implements EventHandlers {
 	int end;
 
 	@Override
-	public void setEventHandlers(LayerManager layerManager) {
+	public void setEventHandlers() {
 		// TODO Auto-generated method stub
 		/*
 		 * btnProxyAdd 
@@ -41,8 +41,7 @@ public class ProxyARPEventHandlers implements EventHandlers {
 				byte[] ipAddress = Address.ip(ProxyARPPanel.proxyInIP.getText());
 				if(ipAddress == null) return;
 				
-				ARPLayer arp = ((ARPLayer) layerManager.GetLayer("ARP"));
-				arp.setProxyTable(deviceAddress, ipAddress, hardwareAddress);
+				ARPLayer.arp.setProxyTable(deviceAddress, ipAddress, hardwareAddress);
 
 				ProxyARPPanel.proxyArpEntry.append(deviceAddress + "    "+ ipStringAddress + "    " + macAddress + "\n");
 			}
@@ -94,9 +93,7 @@ public class ProxyARPEventHandlers implements EventHandlers {
 			public void actionPerformed(ActionEvent e) {
 
 				ProxyARPPanel.proxyArpEntry.replaceRange("", start, end + 1);
-
-				ARPLayer arp = ((ARPLayer) layerManager.GetLayer("ARP"));
-				arp.removeProxyTable(ProxyARPPanel.proxyDevice.getText());
+				ARPLayer.arp.removeProxyTable(ProxyARPPanel.proxyDevice.getText());
 				ProxyARPPanel.proxyDevice.setText("");
 				ProxyARPPanel.proxyInIP.setText("");
 				ProxyARPPanel.proxyOutMAC.setText("");

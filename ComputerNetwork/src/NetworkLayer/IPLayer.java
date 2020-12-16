@@ -1,27 +1,162 @@
 package NetworkLayer;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+
+import org.jnetpcap.Pcap;
+import org.jnetpcap.packet.PcapPacket;
+import org.jnetpcap.packet.PcapPacketHandler;
+
+import Model.ETHERNET;
+import Model.OutgoingQueue;
+import Model.Route;
+import Model.Router;
+import Model._IP_ADDR;
 
 public class IPLayer implements BaseLayer {
 	public int nUpperLayerCount = 0;
 	public String pLayerName = null;
-	public ArrayList<BaseLayer> p_aUnderLayer = new ArrayList<BaseLayer>();
-	public ArrayList<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
+	public List<BaseLayer> p_aUnderLayer = new ArrayList<BaseLayer>();
+	public List<BaseLayer> p_aUpperLayer = new ArrayList<BaseLayer>();
 	
-	private class _IP_ADDR {
-		private byte[] addr = new byte[4];
+	public static List<IPLayer> routingIPLayer = new ArrayList<IPLayer>();
+	public static Router router = new Router();
+	public static OutgoingQueue outgoingQueue;
+	public _IP_ADDR myIP;
+	
+	public IPLayer(String string) {
+		pLayerName = string;
+		myIP = new _IP_ADDR();
+	}
 
-		public _IP_ADDR() {
-			this.addr[0] = (byte) 0x00;
-			this.addr[1] = (byte) 0x00;
-			this.addr[2] = (byte) 0x00;
-			this.addr[3] = (byte) 0x00;
-		}
+	void setIPDstAddr(_IP_HEADER ipHeader, byte[] addr) {
+		for(int i = 0; i < 4; i++)
+			ipHeader.ipDstAddr.addr[i] = addr[i];
 	}
 	
-	@SuppressWarnings("unused")
+	void setIPSrcAddr(_IP_HEADER ipHeader, byte[] addr) {
+		for(int i = 0; i < 4; i++)
+			ipHeader.ipSrcAddr.addr[i] = addr[i];
+	}
+	
+	public void setMyIP(byte[] ip) {
+		System.arraycopy(ip, 0, myIP.addr, 0, 4);
+	}
+	
+	// 해당 ip가 내 ip인지 확인
+	private boolean isMine(byte[] ip) {
+		return Arrays.equals(myIP.addr, ip);
+	}
+	
+	private boolean versionValid(byte versionLength) {
+		return versionLength == 0x04;
+	}
+	private boolean lengthValid(byte versionLength) {
+		return versionLength == 0x05;
+	}
+	
+
+	
+	@Override
+	public boolean Receive(byte[] input) {
+		if(input.length < 20)
+			return false;
+		
+		_IP_HEADER receiveHeader = new _IP_HEADER(input);
+		if(versionValid(receiveHeader.VER) && lengthValid(receiveHeader.HLEN)) {
+			if(isMine(receiveHeader.ipSrcAddr.addr) || isMine(receiveHeader.ipDstAddr.addr))
+				return false;
+			else {
+//				System.out.println("RECV IP");
+//				// 다른 IP Layer로 이동				
+				Route route = router.getRoute(receiveHeader.ipDstAddr.addr);
+				if(route._interface == -1) { // unreachable
+					return false;
+				}
+				else {
+					
+					byte[] destination = new byte[4];
+					if(route.flag == 6) { // UG : connected to gateway
+						System.arraycopy(route.gateway.addr, 0, destination, 0, 4);
+					}
+					else if(route.flag == 5) { // UH : connected direct host
+						System.arraycopy(receiveHeader.ipDstAddr.addr, 0, destination, 0, 4);
+					}
+					else {
+						return false;
+					}
+					
+					// 목적지에 대한 MAC 정보가 없는 경우
+					byte[] foundedMAC = ARPLayer.arp.getEthernet(destination);
+					if(foundedMAC == null || Arrays.equals(foundedMAC, ETHERNET.NIL)) {
+						
+						// 현재 어뎁터를 제외한 나머지 어뎁터에 ARP를 보냄
+						// 현재 어뎁터에서 왔으므로 생략
+						for(int i = 0; i < IPLayer.routingIPLayer.size();i++) {
+							IPLayer ipLayer = IPLayer.routingIPLayer.get(i);
+//							if(ipLayer == this) continue;
+							ARPLayer otherARPLayer = (ARPLayer)ipLayer.GetUnderLayer(1);
+							
+							/*
+							 * Sender IP : 라우터의 다른 어뎁터의 IP
+							 * Sender ETH : 라우터의 다른 어뎁터 MAC
+							 * Target IP : 찾을 Gateway IP
+							 * Target ETH : 브로드캐스팅
+							 */
+							otherARPLayer.setIPSenderAddress(otherARPLayer.myIP.addr);
+							otherARPLayer.setEthernetSenderAddress(otherARPLayer.myETH.addr);
+							otherARPLayer.setIPTargetAddress(destination);
+							otherARPLayer.setEthernetTargetAddress(ETHERNET.BROADCAST);
+							
+							EthernetLayer otherEthernetLayer = (EthernetLayer)otherARPLayer.GetUnderLayer();
+							otherEthernetLayer.setDstEthernetAddress(ETHERNET.NIL);
+							otherEthernetLayer.setEthernetType(ETHERNET.PROT_ARP);
+							
+							otherARPLayer.Send(null,0);
+							// 패킷을 저장해두고 스레드 시작
+							outgoingQueue.add(i, destination, input);
+						}
+						return false;	
+					}
+					else {
+						outgoingQueue.add(route._interface, destination, input);
+//						routingIPLayer.get(route._interface).Send(input, input.length);
+						return true;
+					}
+				}
+			}
+				
+		}
+		return false;
+		
+	}
+
+	
+	public boolean Send(byte[] input, int length) {
+		
+		_IP_HEADER header = new _IP_HEADER(input);
+		ARPLayer arp = (ARPLayer)p_aUnderLayer.get(1);
+		EthernetLayer ethernetLayer = (EthernetLayer)p_aUnderLayer.get(0);
+		ethernetLayer.setDstEthernetAddress(arp.arp.getEthernet(header.ipDstAddr.addr));
+		ethernetLayer.setEthernetType(ETHERNET.PROT_IP);
+		return p_aUnderLayer.get(0).Send(input, input.length);		
+		
+	}
+	
+//	public synchronized static void printIPInfo(String msg, byte[] send, byte[] recv) {
+//		System.out.print(msg + " [ SRC : ");
+//		for(int i = 0; i < 3; i++)
+//			System.out.print(String.format("%d.", (int)(send[i] & 0xff)));
+//		System.out.print(String.format("%d", (int)(send[3] & 0xff)));
+//		System.out.print(", DST : ");
+//		for(int i = 0; i < 3; i++)
+//			System.out.print(String.format("%d.", (int)(recv[i] & 0xff)));
+//		System.out.print(String.format("%d", (int)(recv[3] & 0xff)));
+//		System.out.println("]");
+//		System.out.println();
+//	}
+	
 	private class _IP_HEADER {
 		byte VER;
 		byte HLEN;
@@ -80,8 +215,8 @@ public class IPLayer implements BaseLayer {
 			headerChecksum[1] = header[11];
 
 			
-			System.arraycopy(header, 12, ipDstAddr.addr, 0, 4);
-			System.arraycopy(header, 16, ipSrcAddr.addr, 0, 4);
+			System.arraycopy(header, 16, ipDstAddr.addr, 0, 4);
+			System.arraycopy(header, 12, ipSrcAddr.addr, 0, 4);
 		}
 		
 		public void setTotalLength(int length) {
@@ -116,83 +251,13 @@ public class IPLayer implements BaseLayer {
 			
 			
 			for(int i = 0; i < 4; i++) {
-				header[12+i] = ipDstAddr.addr[i];
-				header[16+i] = ipSrcAddr.addr[i];
+				header[16+i] = ipDstAddr.addr[i];
+				header[12+i] = ipSrcAddr.addr[i];
 			}
 			return header;
 		}
 	}
 	
-	private _IP_HEADER ipHeader = new _IP_HEADER();
-	
-	public IPLayer(String string) {
-		pLayerName = string;
-	}
-
-	public void setIPDstAddr(byte[] addr) {
-		for(int i = 0; i < 4; i++)
-			ipHeader.ipDstAddr.addr[i] = addr[i];
-	}
-	
-	public void setIPSrcAddr(byte[] addr) {
-		for(int i = 0; i < 4; i++)
-			ipHeader.ipSrcAddr.addr[i] = addr[i];
-	}
-	
-	public byte[] getIPSrcAddr() {
-		return ipHeader.ipSrcAddr.addr;
-	}
-	
-	public byte[] getIPDstAddr() {
-		return ipHeader.ipDstAddr.addr;
-	}
-	
-	@Override
-	public boolean Send(byte[] input, int length) {
-		
-		if(input == null && length == 0) // ARP req
-			return p_aUnderLayer.get(1).Send(null, 0);
-		
-		byte[] packet = new byte[20+length];
-		ipHeader.setTotalLength(20+length);
-		System.arraycopy(ipHeader.makeHeader(), 0, packet, 0, 20);
-		System.arraycopy(input, 0, packet, 20, length);
-		
-		return p_aUnderLayer.get(0).Send(packet, 20+length);
-	}
-	
-	// 해당 ip가 내 ip인지 확인
-	private boolean isMine(byte[] ip) {
-		return Arrays.equals(ipHeader.ipSrcAddr.addr, ip);
-	}
-	
-	private boolean versionValid(byte versionLength) {
-		return versionLength == 0x04;
-	}
-	private boolean lengthValid(byte versionLength) {
-		return versionLength == 0x05;
-	}
-	
-	@Override
-	public boolean Receive(byte[] input) {
-		if(input.length < 20)
-			return false;
-		
-		_IP_HEADER receiveHeader = new _IP_HEADER(input);
-		if(versionValid(receiveHeader.VER) && lengthValid(receiveHeader.HLEN)) {
-			if(isMine(receiveHeader.ipSrcAddr.addr))
-				return false;
-			else if(isMine(receiveHeader.ipDstAddr.addr)) {
-				byte[] data = new byte[input.length-20];
-				System.arraycopy(input, 20, data, 0, input.length-20);
-				p_aUpperLayer.get(0).Receive(data);
-				return true;
-			}
-				
-		}
-		return false;
-		
-	}
 	
 	@Override
 	public void SetUnderLayer(BaseLayer pUnderLayer) {
@@ -247,5 +312,6 @@ public class IPLayer implements BaseLayer {
 		pUULayer.SetUnderLayer(this);
 
 	}
+
 
 }

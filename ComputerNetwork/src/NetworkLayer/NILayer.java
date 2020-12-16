@@ -25,8 +25,6 @@ public class NILayer implements BaseLayer {
 	public List<PcapIf> m_pAdapterList;
 	StringBuilder errbuf = new StringBuilder();
 	
-	Thread obj;
-	
 	public NILayer(String pName) {
 		// super(pName);
 		pLayerName = pName;
@@ -39,7 +37,7 @@ public class NILayer implements BaseLayer {
 	public void PacketStartDriver() {
 		int snaplen = 64 * 1024; // Capture all packets, no trucation
 		int flags = Pcap.MODE_PROMISCUOUS; // capture all packets
-		int timeout = 10 * 1000; // 10 seconds in millis
+		int timeout = 1; // 1ms
 		m_AdapterObject = Pcap.openLive(m_pAdapterList.get(m_iNumAdapter).getName(), snaplen, flags, timeout, errbuf);
 	}
 
@@ -70,14 +68,11 @@ public class NILayer implements BaseLayer {
 		}
 		return true;
 	}
-	public void stopReceive() {
-		if(obj != null) {
-			obj.interrupt();
-		}
-	}
+
 	public synchronized boolean Receive() {
 		Receive_Thread thread = new Receive_Thread(m_AdapterObject, this.GetUpperLayer(0));
-		obj = new Thread(thread);
+		Thread obj = new Thread(thread);
+		obj.setName("Adapter"+m_iNumAdapter);
 		obj.start();
 
 		return false;
@@ -145,17 +140,12 @@ class Receive_Thread implements Runnable {
 		while (!Thread.currentThread().isInterrupted()) {
 			PcapPacketHandler<String> jpacketHandler = new PcapPacketHandler<String>() {
 				public void nextPacket(PcapPacket packet, String user) {
-					if(Thread.currentThread().isInterrupted()) {
-						AdapterObject.close();
-						System.out.println("Interrupted");
-						return;
-					}
 					data = packet.getByteArray(0, packet.size());
 					UpperLayer.Receive(data);
 				}
 			};
 
-			AdapterObject.loop(100000, jpacketHandler, "");
+			AdapterObject.loop(100, jpacketHandler, "");
 		}
 	}
 }

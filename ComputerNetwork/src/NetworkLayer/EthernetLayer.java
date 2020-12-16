@@ -1,13 +1,9 @@
 package NetworkLayer;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+
+import Model._ETHERNET_ADDR;
 
 public class EthernetLayer implements BaseLayer {
 	public int nUpperLayerCount = 0;
@@ -17,19 +13,6 @@ public class EthernetLayer implements BaseLayer {
 
 	private final byte[] BROADCAST_ETHERNET = {(byte)0xFF,(byte)0xFF,(byte)0xFF,(byte)0xFF,(byte)0xFF,(byte)0xFF};
 	
-	private class _ETHERNET_ADDR {
-		private byte[] addr = new byte[6];
-
-		public _ETHERNET_ADDR() {
-			this.addr[0] = (byte) 0x00;
-			this.addr[1] = (byte) 0x00;
-			this.addr[2] = (byte) 0x00;
-			this.addr[3] = (byte) 0x00;
-			this.addr[4] = (byte) 0x00;
-			this.addr[5] = (byte) 0x00;
-		}
-	}
-
 	@SuppressWarnings("unused")
 	private class _ETHERNET_HEADER {
 		_ETHERNET_ADDR enetDstAddr;
@@ -77,7 +60,6 @@ public class EthernetLayer implements BaseLayer {
 
 	public void setSrcEthernetAddress(byte[] ethernetAddress) {
 		assert(ethernetAddress.length == 6);
-		assert(ethernetAddress.length == 6);
 		System.arraycopy(ethernetAddress, 0, ethernetHeader.enetSrcAddr.addr, 0, 6);
 	}
 	
@@ -87,27 +69,6 @@ public class EthernetLayer implements BaseLayer {
 		ethernetHeader.type[1] = type[1];
 	}
 	
-	
-	public boolean Send(byte[] input, int length) {
-		byte[] frame = new byte[14+length];
-		byte[] header = ethernetHeader.makeHeader();
-		
-		System.arraycopy(header, 0, frame, 0, 14);
-		System.arraycopy(input, 0, frame, 14, length);
-		
-		p_UnderLayer.Send(frame,frame.length);
-		
-		return true;
-	}
-
-	private boolean isBroadCast(byte[] addr) {
-		return Arrays.equals(BROADCAST_ETHERNET, addr);
-	}
-	
-	private boolean isMine(byte[] addr) {
-		return Arrays.equals(ethernetHeader.enetSrcAddr.addr, addr);
-	}
-	
 	private boolean isARP(byte[] type) {
 		return type[0] == 0x08 && type[1] == 0x06;
 	}
@@ -115,26 +76,58 @@ public class EthernetLayer implements BaseLayer {
 	private boolean isIP(byte[] type) {
 		return type[0] == 0x08 && type[1] == 0x00;
 	}
-
-	public boolean Receive(byte[] input) {
-		_ETHERNET_HEADER receiveHeader = new _ETHERNET_HEADER(input);
+	private boolean isMine(byte[] addr) {
+		return Arrays.equals(ethernetHeader.enetSrcAddr.addr, addr);
+	}
+	
+	@Override
+	public synchronized boolean Send(byte[] input, int length) {
+		byte[] frame = new byte[14+length];
+		byte[] header = ethernetHeader.makeHeader();
 		
-		if(isBroadCast(receiveHeader.enetDstAddr.addr) || isMine(receiveHeader.enetDstAddr.addr)) {
-			byte[] data = new byte[input.length-14];
-			System.arraycopy(input, 14, data, 0, input.length-14);
-			if(isARP(receiveHeader.type)) {
-				setEthernetType(receiveHeader.type);
-				p_aUpperLayer.get(1).Receive(data);
-			}
-			else if(isIP(receiveHeader.type)) {
-				setEthernetType(receiveHeader.type);
-				p_aUpperLayer.get(0).Receive(data);
-			}
-		}
+		System.arraycopy(header, 0, frame, 0, 14);
+		System.arraycopy(input, 0, frame, 14, length);
+		
+//		System.out.println("SEND ETH");
+		p_UnderLayer.Send(frame,frame.length);
 		
 		return true;
 	}
+	
+	@Override
+	public synchronized boolean Receive(byte[] input) {
+		_ETHERNET_HEADER receiveHeader = new _ETHERNET_HEADER(input);
+		
+		
+		if(!isMine(receiveHeader.enetSrcAddr.addr)) {
+			byte[] data = new byte[input.length-14];
+			System.arraycopy(input, 14, data, 0, input.length-14);
+			if(isARP(receiveHeader.type)) {
+//				System.out.println("RECV ETH");
+//				printMACInfo("ETH RECV", receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
+				p_aUpperLayer.get(1).Receive(data);
+			}
+			else if(isIP(receiveHeader.type)) {
+//				System.out.println("RECV ETH");
+//				printMACInfo("ETH RECV", receiveHeader.enetSrcAddr.addr, receiveHeader.enetDstAddr.addr);
+				p_aUpperLayer.get(0).Receive(data);
+			}
+		}
+		return true;
+	}
 
+	public synchronized static void printMACInfo(String msg, byte[] send, byte[] recv) {
+		System.out.print(msg+" [ SRC : ");
+		for(int i = 0; i < 5; i++)
+			System.out.print(String.format("%02X ", send[i] & 0xff));
+		System.out.print(String.format("%02X", send[5] & 0xff));
+		System.out.print(", DST : ");
+		for(int i = 0; i < 5; i++)
+			System.out.print(String.format("%02X ", recv[i] & 0xff));
+		System.out.print(String.format("%02X", recv[5] & 0xff));
+		System.out.println("]");
+	}
+	
 	@Override
 	public void SetUnderLayer(BaseLayer pUnderLayer) {
 		// TODO Auto-generated method stub
@@ -180,4 +173,5 @@ public class EthernetLayer implements BaseLayer {
 		pUULayer.SetUnderLayer(this);
 
 	}
+
 }

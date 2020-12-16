@@ -29,8 +29,6 @@ public class StaticRoutingTablePanel extends JPanel {
 		
 		add(RoutingTable);
 		
-		String d[][] = {{"192.168.0.0","255.255.255.0","192.168.2.1","UG","R8129","2"},{"5","4","1","1","3","8"}};
-		((DefaultTableModel)RoutingTable.getModel()).setDataVector(d, columnHeaders);
 		((UneditableJTable)RoutingTable).updateColWidth(columnHeaders);
 		
 		JScrollPane scrollPane = new JScrollPane(RoutingTable, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);

@@ -22,7 +22,7 @@ public class ProxyARPPanel extends JPanel {
 	public static JButton btnProxyDelete;
 	
 	public ProxyARPPanel(int x, int y ) {
-		setBounds(x,y,400,200);
+		setBounds(x,y,400,300);
 		setBorder(BorderFactory.createTitledBorder("Proxy ARP Entry"));
 		setLayout(null);
 		
